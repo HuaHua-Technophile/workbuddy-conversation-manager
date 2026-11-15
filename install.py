@@ -15,7 +15,7 @@ import os
 import shutil
 import sys
 
-NAME = "workbuddy-conversation-manager"
+NAME = "workbuddy-task-manager"
 REPO = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(REPO, "skills", NAME)
 FILES = ["SKILL.md", "CHANGELOG.md", "PUBLISHING.md"]

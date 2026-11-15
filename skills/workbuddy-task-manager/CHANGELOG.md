@@ -1,11 +1,21 @@
 # Changelog
 
+## 1.5.0 — 2026-11-15
+
+仓库、技能目录、脚本名、安装目录、包名、Release 资产、SkillHub slug 与文档链接统一为 `workbuddy-task-manager`。
+
+- 脚本改名为 `workbuddy_tasks.py`；CLI 新增 `--task` / `--create-group` / `groups` / `--area group` 别名，旧参数继续兼容。
+- 用户可见英文统一为 task / group；README、PUBLISHING、references 与 CI 路径同步更新。
+- 对齐 WorkBuddy 新版数据模型：分组优先读取 `spaces` 表，`move` 同步写 `sessions.space_id`；旧版没有 `space_id` 时回退到 `is_playground=0` + `cwd`。
+- WorkBuddy 内部数据库/接口的 `sessions`、`spaces`、`session_id`、`space_id`、`is_playground`、`conversation_origin` 等原始命名保留，不做破坏性修改。
+- README banner 重绘并更新到 v1.5.0；GitHub Release、SkillHub 与 WorkBuddy `-dir` 包使用 1.5.0。
+
 ## 1.4.2 — 2026-11-15
 
 全项目术语统一为「任务」和「分组」：覆盖 README、SKILL.md、CHANGELOG、PUBLISHING、references、examples 与 CLI 帮助/输出。
 
-- 命令、参数与数据库字段保持不变：`sessions`、`session_id`、`--session`、`spaces`、`--create-space`、`space.name`。
-- 展示名统一为 `WorkBuddy任务管理` / `WorkBuddy Task Manager`；`slug` 与 `name` 仍为 `workbuddy-conversation-manager`。
+- 命令、参数与数据库字段保持不变：`sessions`、`session_id`、`--task`、`groups`、`--create-group`、`space.name`。
+- 展示名统一为 `WorkBuddy任务管理` / `WorkBuddy Task Manager`；`slug` 与 `name` 保持不变。
 - 版本对齐到 1.4.2：GitHub Release、SkillHub 与 WorkBuddy `-dir` 包使用同一版本号。
 - SkillHub 1.4.2 已提交（`skillId=322039`，审核中）；过审后展示名与概述切换为“任务 / 分组”。
 
@@ -31,13 +41,13 @@
 
 - `move` 搬完后自动删除已无 `*.jsonl` 的源项目目录；`--keep-orphans` 可保留，删除清单写入 `batch.json` 的 `removed_dirs`。
 - `doctor` 新增「项目目录一致性」与「空项目目录」检查，默认体检从 8 项扩到 10 项。
-- `--create-space` 改为目录必须已存在，确认新建目录时需加 `--allow-missing`。
+- `--create-group` 改为目录必须已存在，确认新建目录时需加 `--allow-missing`。
 - 本机实测：清理 3 个空源目录，`projects/` 从 93 个目录收敛到 90 个；70 条任务目录一致性 0 异常。
 - 近期迁移实测：9 条任务调整归属，3 个记忆文件与 85 条产出登记（33 条实际移动、26 条已存在、26 条源文件缺失）。
 
 ## 1.2.0 — 2026-11-15
 
-- `move --create-space`：目标分组不存在时按绝对路径创建目录，首个迁入任务作为分组种子。
+- `move --create-group`：目标分组不存在时按绝对路径创建目录，首个迁入任务作为分组种子。
 - 文档补充 WorkBuddy 分组由 `cwd` 派生的说明。
 
 ## 1.1.0 — 2026-11-15
@@ -61,8 +71,8 @@
 
 ### 变更
 
-- 技能名从 `workbuddy-move-conversation` 改为 `workbuddy-conversation-manager`。
-- 脚本名从 `workbuddy_move.py` 改为 `workbuddy_sessions.py`。
+- 技能名从 `workbuddy-move-conversation` 改为 `workbuddy-task-manager`。
+- 脚本名从 `workbuddy_move.py` 改为 `workbuddy_tasks.py`。
 - 标题默认长度改为 **20–30 字**，允许范围 **10–30**；前缀和空格计入。
 - 重命名默认干跑，必须 `--apply` 才写库。
 - 迁移默认只改元数据并同步必要的 JSONL/子目录，不再默认搬记忆与产出。

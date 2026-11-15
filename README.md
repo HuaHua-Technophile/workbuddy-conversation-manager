@@ -1,18 +1,18 @@
 <p align="center">
-  <img src="skills/workbuddy-conversation-manager/assets/banner-1280.png"
+  <img src="skills/workbuddy-task-manager/assets/banner-1280.png"
        width="100%" alt="WorkBuddy Task Manager — local task and group management for AI agents">
 </p>
 
 <p align="center">给 AI Agent 用的 WorkBuddy 本地任务管理技能</p>
 
 <p align="center">
-  <a href="https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases"><img src="https://img.shields.io/github/v/release/HuaHua-Technophile/workbuddy-conversation-manager?label=release&color=2ea44f" alt="Release"></a>
+  <a href="https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases"><img src="https://img.shields.io/github/v/release/HuaHua-Technophile/workbuddy-task-manager?label=release&color=2ea44f" alt="Release"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
 </p>
 
-<p align="center"><sub>repo / slug: <code>workbuddy-conversation-manager</code></sub></p>
+<p align="center"><sub>repo / slug: <code>workbuddy-task-manager</code></sub></p>
 
 <p align="center">
   <a href="#安装">安装</a> ·
@@ -67,8 +67,8 @@ flowchart LR
 技能是纯目录 + Python 标准库脚本，不需要 `pip install`。
 
 ```bash
-git clone https://github.com/HuaHua-Technophile/workbuddy-conversation-manager.git
-cd workbuddy-conversation-manager
+git clone https://github.com/HuaHua-Technophile/workbuddy-task-manager.git
+cd workbuddy-task-manager
 
 python install.py                 # 装到 ~/.workbuddy/skills
 python install.py --to ~/.qoder/skills
@@ -78,34 +78,34 @@ python install.py --targets all   # WorkBuddy / Qoder / .agents 三处都装
 也可以直接复制技能目录：
 
 ```bash
-cp -r skills/workbuddy-conversation-manager "$HOME/.workbuddy/skills/"
+cp -r skills/workbuddy-task-manager "$HOME/.workbuddy/skills/"
 ```
 
 安装后验证：
 
 ```bash
-python "$HOME/.workbuddy/skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py" doctor
+python "$HOME/.workbuddy/skills/workbuddy-task-manager/scripts/workbuddy_tasks.py" doctor
 ```
 
 ## 快速开始
 
-以下命令在已安装的技能目录执行（`cd ~/.workbuddy/skills/workbuddy-conversation-manager`）。
+以下命令在已安装的技能目录执行（`cd ~/.workbuddy/skills/workbuddy-task-manager`）。
 
 ```bash
 # 1. 体检
-python scripts/workbuddy_sessions.py doctor
+python scripts/workbuddy_tasks.py doctor
 
 # 2. 看看有哪些任务
-python scripts/workbuddy_sessions.py list --limit 20
+python scripts/workbuddy_tasks.py list --limit 20
 
 # 3. 导出完整历史（大批量加 --shards 自动均衡分片）
-python scripts/workbuddy_sessions.py rename --export --shards 6 --out ./wb-exp
+python scripts/workbuddy_tasks.py rename --export --shards 6 --out ./wb-exp
 
 # 4. 让 Agent 读 ./wb-exp/*.txt，产出 titles.json，然后先干跑
-python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json
+python scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.json
 
 # 5. 确认无误后落盘
-python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply
+python scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.json --apply
 ```
 
 `titles.json` 格式：
@@ -123,15 +123,15 @@ python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --appl
 
 ```bash
 # 默认：改归属 + 搬任务 JSONL/子目录 + 搬记忆与产出
-python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
+python scripts/workbuddy_tasks.py move --task 6ed7f61f --to "X:/赞大拇指"
 
 # 只要元数据，不搬记忆与产出
-python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
+python scripts/workbuddy_tasks.py move --task 6ed7f61f --to "X:/赞大拇指" --metadata-only
 
 # 目标分组不存在时，用首个迁入任务创建分组（目录需已存在）
-python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
+python scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-group
 # 确认允许新建目录
-python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
+python scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-group --allow-missing
 ```
 
 搬空的源项目目录默认自动删除，`--keep-orphans` 可保留；删除清单会写入本次迁移的 `batch.json`。
@@ -163,13 +163,13 @@ python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --cre
 
 | 文件 | 内容 |
 |---|---|
-| [`SKILL.md`](skills/workbuddy-conversation-manager/SKILL.md) | 技能主文档：完整命令、工作流、安全规则 |
-| [`references/workbuddy-storage.md`](skills/workbuddy-conversation-manager/references/workbuddy-storage.md) | 表结构、路径编码、标题存储、验证 SQL、已知坑 |
-| [`references/rename-classify.md`](skills/workbuddy-conversation-manager/references/rename-classify.md) | 两步式重命名、LPT 分片、子智能体模板 |
-| [`references/cases.md`](skills/workbuddy-conversation-manager/references/cases.md) | 70 条任务重命名实测与踩坑 |
-| [`references/install.md`](skills/workbuddy-conversation-manager/references/install.md) | 三端安装与验证 |
-| [`CHANGELOG.md`](skills/workbuddy-conversation-manager/CHANGELOG.md) | 版本记录 |
-| [`PUBLISHING.md`](skills/workbuddy-conversation-manager/PUBLISHING.md) | 各平台发布状态、CLI 发布与 CI 自动化 |
+| [`SKILL.md`](skills/workbuddy-task-manager/SKILL.md) | 技能主文档：完整命令、工作流、安全规则 |
+| [`references/workbuddy-storage.md`](skills/workbuddy-task-manager/references/workbuddy-storage.md) | 表结构、路径编码、标题存储、验证 SQL、已知坑 |
+| [`references/rename-classify.md`](skills/workbuddy-task-manager/references/rename-classify.md) | 两步式重命名、LPT 分片、子智能体模板 |
+| [`references/cases.md`](skills/workbuddy-task-manager/references/cases.md) | 70 条任务重命名实测与踩坑 |
+| [`references/install.md`](skills/workbuddy-task-manager/references/install.md) | 三端安装与验证 |
+| [`CHANGELOG.md`](skills/workbuddy-task-manager/CHANGELOG.md) | 版本记录 |
+| [`PUBLISHING.md`](skills/workbuddy-task-manager/PUBLISHING.md) | 各平台发布状态、CLI 发布与 CI 自动化 |
 
 ## 环境要求
 
@@ -188,9 +188,9 @@ python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --cre
 
 | 渠道 | 状态 | 入口 |
 |---|---|---|
-| GitHub | v1.4.2 已发布 | [Releases](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases) |
-| SkillHub | 1.4.2 审核中 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-conversation-manager) |
-| WorkBuddy 开放平台 | 待上传 1.4.2 `-dir` 包 | [控制台](https://open.workbuddy.cn) |
+| GitHub | v1.5.0 已发布 | [Releases](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases) |
+| SkillHub | 1.5.0 审核中 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-task-manager) |
+| WorkBuddy 开放平台 | 待上传 1.5.0 `-dir` 包 | [控制台](https://open.workbuddy.cn) |
 | skills.sh | 未收录 | 无手动入口 |
 
 仓库已接入 [`.github/workflows/release.yml`](.github/workflows/release.yml)：push `v*` tag 自动校验版本、构建 zip 并发布 GitHub Release；配置 `SKILLHUB_KEY` 后可同步发布 SkillHub。WorkBuddy 开放平台暂无 API / CLI / CI，只能手动提交。

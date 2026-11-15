@@ -47,12 +47,12 @@
 ### 复现命令
 
 ```bash
-python <skill>/scripts/workbuddy_sessions.py doctor
-python <skill>/scripts/workbuddy_sessions.py backup
-python <skill>/scripts/workbuddy_sessions.py list --all-users
-python <skill>/scripts/workbuddy_sessions.py rename --export --all-users --shards 8 --out ./wb-exp
+python <skill>/scripts/workbuddy_tasks.py doctor
+python <skill>/scripts/workbuddy_tasks.py backup
+python <skill>/scripts/workbuddy_tasks.py list --all-users
+python <skill>/scripts/workbuddy_tasks.py rename --export --all-users --shards 8 --out ./wb-exp
 # 子智能体读 ./wb-exp/shards/groupN.json，产出 titles.json
-python <skill>/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply \
+python <skill>/scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.json --apply \
   --backup-dir ./workbuddy-rename-backup \
   --min-title-len 20 --max-title-len 30
 ```
@@ -66,7 +66,7 @@ python <skill>/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.jso
 3. 源/目标分组记忆文件的精确段落；
 4. 产出文件目标位置与旧路径硬链接/副本。
 
-实际排障顺序：先 `doctor` 看任务文件是否齐全，再 `spaces` 确认目标分组存在，最后 `move` 逐条写入并按 manifest 校验。应用运行中允许热写，写完重启验证侧栏分组。
+实际排障顺序：先 `doctor` 看任务文件是否齐全，再 `groups` 确认目标分组存在，最后 `move` 逐条写入并按 manifest 校验。应用运行中允许热写，写完重启验证侧栏分组。
 
 ## 目录一致性 / 空目录清理实测
 

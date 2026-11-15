@@ -1,6 +1,6 @@
 # 跨 Harness 安装
 
-仓库按 `skills/workbuddy-conversation-manager/SKILL.md` 组织，便于 skills.sh 等目录站索引；宿主只认“技能目录根部有 SKILL.md”的扁平形态，所以用仓库根目录的 `install.py` 摊平安装。
+仓库按 `skills/workbuddy-task-manager/SKILL.md` 组织，便于 skills.sh 等目录站索引；宿主只认“技能目录根部有 SKILL.md”的扁平形态，所以用仓库根目录的 `install.py` 摊平安装。
 
 ## 一键安装
 
@@ -18,10 +18,10 @@ python install.py --to ~/.qoder/skills
 
 | 宿主 | 用户级技能目录 |
 |---|---|
-| Qoder | `~/.qoder/skills/workbuddy-conversation-manager/` |
-| WorkBuddy | `~/.workbuddy/skills/workbuddy-conversation-manager/` |
-| 共享 agents 目录 | `~/.agents/skills/workbuddy-conversation-manager/` |
-| Codex（可选） | `~/.codex/skills/workbuddy-conversation-manager/` |
+| Qoder | `~/.qoder/skills/workbuddy-task-manager/` |
+| WorkBuddy | `~/.workbuddy/skills/workbuddy-task-manager/` |
+| 共享 agents 目录 | `~/.agents/skills/workbuddy-task-manager/` |
+| Codex（可选） | `~/.codex/skills/workbuddy-task-manager/` |
 
 Codex 目录不存在时无需创建；需要时用 `--to ~/.codex/skills` 安装。
 
@@ -29,7 +29,7 @@ Codex 目录不存在时无需创建；需要时用 `--to ~/.codex/skills` 安�
 
 ```bash
 mkdir -p "$HOME/.qoder/skills"
-cp -r skills/workbuddy-conversation-manager "$HOME/.qoder/skills/"
+cp -r skills/workbuddy-task-manager "$HOME/.qoder/skills/"
 ```
 
 手动复制后目录内应直接看到 `SKILL.md`，而不是 `skills/` 子目录。
@@ -37,7 +37,7 @@ cp -r skills/workbuddy-conversation-manager "$HOME/.qoder/skills/"
 ## 验证
 
 ```bash
-python "$HOME/.qoder/skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py" doctor
+python "$HOME/.qoder/skills/workbuddy-task-manager/scripts/workbuddy_tasks.py" doctor
 ```
 
 `doctor` 10 项全 `OK` 说明数据库、任务文件、目录一致性、快照和备份都正常。

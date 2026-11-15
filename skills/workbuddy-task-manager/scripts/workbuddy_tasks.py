@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.4.2"
+VERSION = "1.5.0"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 
@@ -63,6 +63,11 @@ def norm_cwd(value: str) -> str:
     if len(s) > 3 and s.endswith("/"):
         s = s[:-1]
     return s
+
+
+def norm_space_id(value) -> str | None:
+    s = str(value or "").strip()
+    return None if s in ("", "-1") else s
 
 
 def path_key(value) -> str:
@@ -170,17 +175,23 @@ class WorkBuddy:
 
     def default_user_id(self):
         row = self.con.execute(
-            "select user_id, count(*) c from sessions where deleted_at is null "
+            "select user_id, count(*) c from sessions "
+            "where (deleted_at is null or deleted_at < 0) "
             "group by user_id order by c desc limit 1"
         ).fetchone()
         return row[0] if row and row[0] else None
+
+    def table_exists(self, name: str) -> bool:
+        return bool(self.con.execute(
+            "select 1 from sqlite_master where type='table' and name=?", (name,)
+        ).fetchone())
 
     def session(self, sid: str):
         row = self.con.execute("select * from sessions where id=?", (sid,)).fetchone()
         return dict(row) if row else None
 
     def all_sessions(self, include_deleted: bool = False):
-        where = "" if include_deleted else "deleted_at is null and "
+        where = "" if include_deleted else "(deleted_at is null or deleted_at < 0) and "
         if self.user_id and self.user_id != "*":
             rows = self.con.execute(
                 f"select * from sessions where {where}user_id=? "
@@ -216,45 +227,134 @@ class WorkBuddy:
         return hits
 
     def spaces(self):
+        has_spaces = self.table_exists("spaces")
+        user_clause = ""
+        params = []
         if self.user_id and self.user_id != "*":
-            rows = self.con.execute(
-                "select cwd, count(*) n, max(last_activity_at) last from sessions "
-                "where deleted_at is null and is_playground=0 and user_id=? "
-                "group by cwd order by last desc", (self.user_id,)
-            ).fetchall()
-        else:
-            rows = self.con.execute(
-                "select cwd, count(*) n, max(last_activity_at) last from sessions "
-                "where deleted_at is null and is_playground=0 "
-                "group by cwd order by last desc"
-            ).fetchall()
-        return [dict(r) for r in rows]
+            user_clause = " and s.user_id=?"
+            params = [self.user_id]
 
-    def resolve_space(self, query: str) -> str:
+        out = []
+        if has_spaces:
+            rows = self.con.execute(f"""
+                select s.id, s.name,
+                       coalesce(nullif(s.create_folder_path, ''), s.primary_folder_path) path,
+                       count(x.id) n, max(x.last_activity_at) last
+                from spaces s
+                left join sessions x on x.space_id = s.id
+                     and (x.deleted_at is null or x.deleted_at < 0)
+                where (s.deleted_at is null or s.deleted_at < 0)
+                  and s.status = 'active'{user_clause}
+                group by s.id, s.name, path
+                order by last desc
+            """, params).fetchall()
+            for row in rows:
+                item = dict(row)
+                if not item.get("path"):
+                    continue
+                item["cwd"] = norm_cwd(item["path"])
+                item["name"] = item.get("name") or Path(item["cwd"]).name
+                out.append(item)
+
+        legacy_user = " and x.user_id=?" if self.user_id and self.user_id != "*" else ""
+        legacy_params = [self.user_id] if self.user_id and self.user_id != "*" else []
+        no_space = ""
+        if has_spaces:
+            no_space = " or not exists(select 1 from spaces s where s.id = x.space_id)"
+        legacy = self.con.execute(f"""
+            select x.cwd, count(*) n, max(x.last_activity_at) last
+            from sessions x
+            where (x.deleted_at is null or x.deleted_at < 0)
+              and x.is_playground = 0
+              and (x.space_id is null or x.space_id = '' or x.space_id = '-1'{no_space}){legacy_user}
+            group by x.cwd
+            order by last desc
+        """, legacy_params).fetchall()
+        for row in legacy:
+            item = dict(row)
+            item["id"] = None
+            item["cwd"] = norm_cwd(item["cwd"])
+            item["name"] = Path(item["cwd"]).name
+            out.append(item)
+
+        merged = {}
+        for item in out:
+            key = norm_cwd(item["cwd"]).lower()
+            if key not in merged or (merged[key].get("id") is None and item.get("id")):
+                merged[key] = item
+        return sorted(merged.values(), key=lambda item: item.get("last") or 0, reverse=True)
+
+    def create_space(self, path: str, seed_session: dict | None = None) -> dict:
+        normalized = norm_cwd(path)
+        target_name = Path(normalized).name
+        fallback = {"id": None, "cwd": normalized, "name": target_name, "n": 0, "last": None}
+        if not self.table_exists("spaces"):
+            return fallback
+        existing = self.con.execute(
+            "select id, name, coalesce(nullif(create_folder_path, ''), primary_folder_path) path "
+            "from spaces where (deleted_at is null or deleted_at < 0) "
+            "and (lower(replace(create_folder_path, '\\', '/')) = ? "
+            "     or lower(replace(primary_folder_path, '\\', '/')) = ? "
+            "     or name = ?) limit 1",
+            (normalized.lower(), normalized.lower(), target_name),
+        ).fetchone()
+        if existing:
+            item = dict(existing)
+            item["cwd"] = norm_cwd(item.get("path") or normalized)
+            item["n"] = 0
+            item["last"] = None
+            return item
+        user_id = (seed_session or {}).get("user_id") or self.user_id
+        device = self.con.execute(
+            "select device_id from spaces where user_id=? order by updated_at desc limit 1",
+            (user_id,),
+        ).fetchone()
+        device_id = device[0] if device else str(uuid.uuid4())
+        space_id = str(uuid.uuid4())
+        now = int(time.time() * 1000)
+        with self.con:
+            self.con.execute(
+                "insert into spaces (id, user_id, device_id, name, primary_folder_path, "
+                "create_folder_path, pinned, sort_order, status, transport, conversation_origin, "
+                "deleted_at, created_at, updated_at, source_kind) "
+                "values (?, ?, ?, ?, NULL, ?, 0, NULL, 'active', 'local', NULL, -1, ?, ?, 'seed')",
+                (space_id, user_id, device_id, target_name, str(Path(normalized)), now, now),
+            )
+        return {"id": space_id, "cwd": normalized, "name": target_name, "n": 0, "last": None}
+
+    def resolve_space(self, query: str) -> dict:
         spaced = self.spaces()
         if not spaced:
-            raise UserError("数据库里没有任何分组（is_playground=0 且未删除的任务）。")
+            raise UserError("数据库里没有任何分组。")
         raw_q = str(query).strip()
         nq = norm_cwd(raw_q).lower()
-        exact = [s for s in spaced if norm_cwd(s["cwd"]).lower() == nq]
+        exact = [
+            s for s in spaced
+            if norm_cwd(s["cwd"]).lower() == nq
+            or str(s.get("name") or "").lower() == raw_q.lower()
+        ]
         if len(exact) == 1:
-            return exact[0]["cwd"]
+            return exact[0]
         loose = []
         for s in spaced:
             n = norm_cwd(s["cwd"])
-            if n.lower().endswith("/" + nq) or Path(n).name.lower() == raw_q.lower():
+            if (
+                n.lower().endswith("/" + nq)
+                or Path(n).name.lower() == raw_q.lower()
+                or str(s.get("name") or "").lower() == raw_q.lower()
+            ):
                 loose.append(s)
         if len(loose) == 1:
-            return loose[0]["cwd"]
+            return loose[0]
         if len(exact) > 1 or len(loose) > 1:
             candidates = exact or loose
             lines = "\n".join(
-                f"  - {s['cwd']} ({s['n']} 条, 最近 {format_ms(s['last'])})"
+                f"  - {s.get('name') or '-'}  {s['cwd']} ({s['n']} 条, 最近 {format_ms(s['last'])})"
                 for s in candidates
             )
             raise UserError(f"目标分组不唯一，请用完整路径指定：\n{lines}")
         lines = "\n".join(
-            f"  - {s['cwd']} ({s['n']} 条, 最近 {format_ms(s['last'])})"
+            f"  - {s.get('name') or '-'}  {s['cwd']} ({s['n']} 条, 最近 {format_ms(s['last'])})"
             for s in spaced[:20]
         )
         raise UserError(
@@ -270,7 +370,8 @@ class WorkBuddy:
 
     def project_dir_for_space(self, cwd: str) -> Path:
         row = self.con.execute(
-            "select id from sessions where cwd=? and deleted_at is null "
+            "select id from sessions where cwd=? "
+            "and (deleted_at is null or deleted_at < 0) "
             "order by is_playground asc, last_activity_at desc limit 1", (cwd,)
         ).fetchone()
         if row:
@@ -301,7 +402,14 @@ class WorkBuddy:
                 out.append((p, data))
         return out
 
-    def update_session(self, sid: str, cwd: str | None = None, is_playground: int | None = None):
+    def update_session(
+        self,
+        sid: str,
+        cwd: str | None = None,
+        is_playground: int | None = None,
+        space_id: str | None = None,
+        clear_space: bool = False,
+    ):
         sets, params = [], []
         if cwd is not None:
             sets.append("cwd=?")
@@ -309,6 +417,11 @@ class WorkBuddy:
         if is_playground is not None:
             sets.append("is_playground=?")
             params.append(int(is_playground))
+        if clear_space:
+            sets.append("space_id=NULL")
+        elif space_id is not None:
+            sets.append("space_id=?")
+            params.append(space_id)
         if not sets:
             return
         params.append(sid)
@@ -626,15 +739,27 @@ class Mover:
             patched.append({"path": str(path), "backup": str(backup)})
         return patched
 
-    def move(self, session: dict, target_cwd: str | None, mode: str):
+    def move(self, session: dict, target, mode: str):
+        if isinstance(target, str) or target is None:
+            target = {
+                "id": None,
+                "cwd": target,
+                "name": Path(target).name if target else None,
+            }
+        target_cwd = target.get("cwd")
+        target_space_id = norm_space_id(target.get("id"))
         sid = session["id"]
         old_cwd_raw = session["cwd"]
         old_cwd = Path(old_cwd_raw)
         title = session.get("custom_title") or session.get("title") or sid
         old_flag = int(session.get("is_playground") or 0)
+        old_space_id = norm_space_id(session.get("space_id"))
         if mode == "space":
             assert target_cwd
-            if norm_cwd(old_cwd_raw) == norm_cwd(target_cwd):
+            if (
+                norm_cwd(old_cwd_raw) == norm_cwd(target_cwd)
+                and old_space_id == target_space_id
+            ):
                 return {
                     "session_id": sid, "title": title, "status": "skipped",
                     "reason": "已经在目标分组", "old_cwd": old_cwd_raw,
@@ -642,10 +767,12 @@ class Mover:
                 }
             new_cwd = target_cwd
             new_flag = 0
+            new_space_id = target_space_id
         else:
             new_cwd = old_cwd_raw
             new_flag = 1
             target_cwd = old_cwd_raw
+            new_space_id = None
 
         item_dir = self.backup.item_dir(sid)
         src_project = None
@@ -657,6 +784,7 @@ class Mover:
             "from_cwd": old_cwd_raw, "to_cwd": new_cwd,
             "metadata_only": not with_assets,
             "old_is_playground": old_flag, "new_is_playground": new_flag,
+            "old_space_id": old_space_id, "new_space_id": new_space_id,
             "backup_dir": str(item_dir), "memory": [], "outputs": [],
             "snapshots": [], "session": {}, "db_changed": False,
         }
@@ -703,6 +831,8 @@ class Mover:
                 sid,
                 cwd=new_cwd if mode == "space" else None,
                 is_playground=new_flag,
+                space_id=new_space_id,
+                clear_space=(new_space_id is None),
             )
             manifest["db_changed"] = True
             write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
@@ -810,6 +940,8 @@ class Mover:
             "db_cwd": bool(row) and norm_cwd(row["cwd"]) == norm_cwd(manifest["to_cwd"]),
             "db_is_playground": bool(row) and int(row["is_playground"] or 0) == manifest["new_is_playground"],
         }
+        if "new_space_id" in manifest:
+            checks["db_space_id"] = bool(row) and norm_space_id(row.get("space_id")) == manifest.get("new_space_id")
         if manifest["mode"] == "space":
             dst_jsonl = Path(manifest["session"]["dst_jsonl"])
             src_jsonl = Path(manifest["session"]["src_jsonl"])
@@ -838,11 +970,20 @@ class Mover:
 
     def rollback_manifest(self, manifest: dict):
         sid = manifest["session_id"]
-        self.wb.update_session(
-            sid,
-            cwd=manifest["from_cwd"],
-            is_playground=manifest["old_is_playground"],
-        )
+        if "old_space_id" in manifest:
+            self.wb.update_session(
+                sid,
+                cwd=manifest["from_cwd"],
+                is_playground=manifest["old_is_playground"],
+                space_id=manifest.get("old_space_id"),
+                clear_space=(manifest.get("old_space_id") is None),
+            )
+        else:
+            self.wb.update_session(
+                sid,
+                cwd=manifest["from_cwd"],
+                is_playground=manifest["old_is_playground"],
+            )
         if manifest["mode"] == "space":
             sess = manifest["session"]
             src_jsonl = Path(sess["src_jsonl"])
@@ -903,10 +1044,10 @@ def print_spaces(wb: WorkBuddy, as_json=False):
         print(json.dumps({"user_id": wb.user_id, "spaces": spaces}, ensure_ascii=False, indent=2))
         return
     print(f"用户: {wb.user_id or '-'}")
-    print(f"{'分组路径':<60} {'任务数':>6}  最近活跃")
-    print("-" * 88)
+    print(f"{'分组':<24} {'路径':<52} {'任务数':>6}  最近活跃")
+    print("-" * 108)
     for s in spaces:
-        print(f"{s['cwd']:<60} {s['n']:>6}  {format_ms(s['last'])}")
+        print(f"{s.get('name') or '-':<24} {s['cwd']:<52} {s['n']:>6}  {format_ms(s['last'])}")
 
 
 def print_sessions(rows, as_json=False):
@@ -1000,11 +1141,17 @@ def normalize_space_path(value: str) -> str:
     if len(s) > 3:
         s = s.rstrip("/")
     if not re.match(r"^[A-Za-z]:/", s):
-        raise UserError("--create-space 需要 Windows 绝对路径，例如 D:/VMs")
+        raise UserError("--create-group 需要 Windows 绝对路径，例如 D:/VMs")
     return s
 
 
-def resolve_target_space(wb: WorkBuddy, value: str, create: bool, allow_missing: bool = False):
+def resolve_target_space(
+    wb: WorkBuddy,
+    value: str,
+    create: bool,
+    allow_missing: bool = False,
+    seed_session: dict | None = None,
+):
     try:
         return wb.resolve_space(value)
     except UserError as exc:
@@ -1016,12 +1163,15 @@ def resolve_target_space(wb: WorkBuddy, value: str, create: bool, allow_missing:
             if not target.is_dir():
                 raise UserError(f"目标路径不是目录：{path}")
             print(f"[INFO] 使用已有目录创建分组：{path}（首个迁入任务作为种子）")
-            return path
-        if not allow_missing:
-            raise UserError(f"目录不存在：{path}。确认在该路径创建分组请加 --allow-missing。")
-        target.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] 新建目录并创建分组：{path}（首个迁入任务作为种子）")
-        return path
+        else:
+            if not allow_missing:
+                raise UserError(f"目录不存在：{path}。确认在该路径创建分组请加 --allow-missing。")
+            target.mkdir(parents=True, exist_ok=True)
+            print(f"[INFO] 新建目录并创建分组：{path}（首个迁入任务作为种子）")
+        space = wb.create_space(path, seed_session)
+        if space.get("id"):
+            print(f"[INFO] 已写入 WorkBuddy spaces 表：{space['name']} ({space['id']})")
+        return space
 
 
 def cmd_move(args):
@@ -1039,9 +1189,9 @@ def cmd_move(args):
             if not args.to:
                 raise UserError("迁移到分组时必须提供 --to。")
             if len(args.to) == 1:
-                targets = [resolve_target_space(wb, args.to[0], create, allow_missing)] * len(sessions)
+                targets = [resolve_target_space(wb, args.to[0], create, allow_missing, sessions[0] if sessions else None)] * len(sessions)
             elif len(args.to) == len(sessions):
-                targets = [resolve_target_space(wb, t, create, allow_missing) for t in args.to]
+                targets = [resolve_target_space(wb, t, create, allow_missing, sessions[0] if sessions else None) for t in args.to]
             else:
                 raise UserError("--to 的数量必须是 1，或与任务数量一致。")
         else:
@@ -1672,7 +1822,7 @@ def cmd_list(args):
         if args.json:
             print(json.dumps(items, ensure_ascii=False, indent=2))
             return 0
-        print(f"{'ID':<38} {'账号':<9} {'区':<3} {'大小':>9}  标题")
+        print(f"{'ID':<38} {'账号':<9} {'类型':<4} {'大小':>9}  标题")
         print("-" * 110)
         for it in items:
             size = f"{it['bytes']/1024:.0f}KB" if it["bytes"] is not None else "缺失"
@@ -1697,7 +1847,7 @@ def cmd_extract(args):
             elif getattr(args, "session", None):
                 sessions = select_sessions(wb, args.session)
             else:
-                raise UserError("请用 --session 指定任务，或使用 --all。")
+                raise UserError("请用 --task 指定任务，或使用 --all。")
         out = Path(args.out).expanduser().resolve()
         out.mkdir(parents=True, exist_ok=True)
         manifest = []
@@ -1959,15 +2109,15 @@ def cmd_rename(args):
 
 def build_parser():
     p = argparse.ArgumentParser(
-        prog="workbuddy_sessions.py",
+        prog="workbuddy_tasks.py",
         description="WorkBuddy 任务管理：体检、列表、两步式重命名、迁移、备份与回滚",
     )
-    p.add_argument("--version", action="version", version=f"workbuddy-conversation-manager {VERSION}")
+    p.add_argument("--version", action="version", version=f"workbuddy-task-manager {VERSION}")
     p.add_argument("--workbuddy-home", default=str(DEFAULT_HOME), help="WorkBuddy 数据目录")
     p.add_argument("--user-id", default=None, help="只处理指定用户；默认取任务最多的用户")
     sub = p.add_subparsers(dest="command", required=True)
 
-    sp = sub.add_parser("spaces", help="列出已有分组")
+    sp = sub.add_parser("spaces", aliases=["groups"], help="列出已有分组")
     sp.add_argument("--json", action="store_true")
 
     sf = sub.add_parser("find", help="按 ID/标题/关键词查任务")
@@ -1998,14 +2148,14 @@ def build_parser():
     sl.add_argument("--keyword", default=None, help="标题关键词")
     sl.add_argument("--cwd", default=None, help="cwd 包含匹配")
     sl.add_argument("--since", default=None, help="YYYY-MM-DD 之后活跃")
-    sl.add_argument("--area", choices=["all", "task", "space"], default="all")
+    sl.add_argument("--area", choices=["all", "task", "group", "space"], default="all")
     sl.add_argument("--include-deleted", action="store_true")
     sl.add_argument("--limit", type=int, default=0)
     sl.add_argument("--json", action="store_true")
     sl.set_defaults(func=cmd_list)
 
     se = sub.add_parser("extract", help="提取 user/assistant 正文（旧命令，等价 rename --export）")
-    se.add_argument("--session", action="append", default=[])
+    se.add_argument("--session", "--task", dest="session", action="append", default=[])
     se.add_argument("--all", action="store_true")
     se.add_argument("--all-users", action="store_true")
     se.add_argument("--out", required=True)
@@ -2024,7 +2174,7 @@ def build_parser():
     sr.add_argument("--keyword", default=None)
     sr.add_argument("--cwd", default=None)
     sr.add_argument("--since", default=None, help="YYYY-MM-DD 之后活跃")
-    sr.add_argument("--area", choices=["all", "task", "space"], default="all")
+    sr.add_argument("--area", choices=["all", "task", "group", "space"], default="all")
     sr.add_argument("--include-deleted", action="store_true")
     sr.add_argument("--limit", type=int, default=0)
     sr.add_argument("--backup-dir", default=None)
@@ -2048,14 +2198,14 @@ def build_parser():
     st.set_defaults(func=cmd_apply_titles, require_prefix=True, apply=False, dry_run=False)
 
     mv = sub.add_parser("move", help="迁移任务")
-    mv.add_argument("--session", action="append", required=True, help="任务 ID、标题或关键词；可重复")
+    mv.add_argument("--session", "--task", dest="session", action="append", required=True, help="任务 ID、标题或关键词；可重复")
     mv.add_argument("--to", action="append", default=[], help="目标分组路径/名称；可重复")
-    mv.add_argument("--mode", choices=["space", "task"], default="space")
+    mv.add_argument("--mode", choices=["space", "group", "task"], default="space")
     mv.add_argument("--backup-dir", default=None)
-    mv.add_argument("--create-space", action="store_true",
+    mv.add_argument("--create-space", "--create-group", dest="create_space", action="store_true",
                     help="目标分组不存在时按绝对路径创建，首个迁入任务作为种子")
     mv.add_argument("--allow-missing", action="store_true",
-                    help="配合 --create-space，目录不存在时允许创建")
+                    help="配合 --create-group，目录不存在时允许创建")
     mv.add_argument("--keep-orphans", action="store_true",
                     help="保留搬空的源项目目录（默认自动删除）")
     asset_group = mv.add_mutually_exclusive_group()
@@ -2083,13 +2233,17 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "spaces":
+    if args.command in ("spaces", "groups"):
         wb = WorkBuddy(Path(args.workbuddy_home), args.user_id)
         try:
             print_spaces(wb, args.json)
             return 0
         finally:
             wb.close()
+    if getattr(args, "area", None) == "group":
+        args.area = "space"
+    if getattr(args, "mode", None) == "group":
+        args.mode = "space"
     try:
         return args.func(args)
     except UserError as exc:

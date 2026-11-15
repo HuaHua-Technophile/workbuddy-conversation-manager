@@ -1,5 +1,12 @@
 # WorkBuddy 本地存储与操作口径
 
+## 内部命名核验（2026-11-15）
+
+- 数据表：`sessions` 存任务，`spaces` 存分组；`sessions.space_id` 指向 `spaces.id`。
+- 关键字段：`sessions.is_playground`（`1`=任务，`0`=分组）、`sessions.space_id`、`sessions.group_id` / `group_title`、`sessions.conversation_origin`。
+- 客户端代码/API 仍有旧英文名，例如 `wb.conversations.create`、`sessions`、`spaces`；本技能**保留这些底层标识**，只把用户可见文案统一为「任务 / 分组」。
+- `workspaces` 表只记录最近打开过的工作目录，不是分组，也不是任务归属。
+
 ## 目录结构
 
 ```
@@ -27,36 +34,48 @@
 
 ## 数据库关键字段
 
-`sessions` 表（迁移只改 `cwd` 与 `is_playground`）：
+`sessions` 表（迁移改 `cwd`、`is_playground` 与 `space_id`）：
 
 | 字段 | 含义 |
 |---|---|
 | `id` | 任务 UUID |
-| `cwd` | 分组归属路径，权威来源 |
+| `cwd` | 目标分组路径 |
+| `space_id` | 目标分组 ID，指向 `spaces.id`；顶部任务为 `NULL` |
 | `is_playground` | `1`=顶部“任务”；`0`=“分组” |
 | `title` / `custom_title` | 标题；重命名时两者一起写 |
 | `user_id` | 账号；只处理当前用户或 `--all-users` |
 | `last_activity_at` / `updated_at` | 排序与显示 |
-| `deleted_at` | 非空表示已删除，默认忽略 |
+| `deleted_at` | `NULL` 或 `< 0` 表示未删除；正数时间戳表示已删除 |
+
+`spaces` 表（分组）：
+
+| 字段 | 含义 |
+|---|---|
+| `id` | 分组 UUID |
+| `name` | 分组名称 |
+| `primary_folder_path` / `create_folder_path` | 分组路径；通常 `create_folder_path` 可用 |
+| `user_id` / `device_id` | 归属账号与设备 |
+| `status` / `transport` | `active`；本地为 `local` |
+| `deleted_at` | `NULL` 或 `< 0` 表示未删除 |
 
 `workspaces` 表只是“最近打开过的工作目录”，不决定侧栏分组，不要拿它当权威。
 
 ### 分组判定
 
-应用构建分组列表时使用的等价查询：
+应用优先读取 `spaces` 表；旧数据没有 `space_id` 时，才回退到 `is_playground=0` 的 `cwd`：
 
 ```sql
-SELECT DISTINCT cwd
-FROM sessions
-WHERE is_playground = 0 AND deleted_at IS NULL;
+SELECT id, name, coalesce(nullif(create_folder_path, ''), primary_folder_path) AS path
+FROM spaces
+WHERE (deleted_at IS NULL OR deleted_at < 0) AND status = 'active';
 ```
 
 因此：
 
-- 目标分组必须至少有一条 `is_playground=0` 的任务。
-- 只有 `is_playground=1` 任务的临时目录不算“分组”。
-- 任务移到分组：`cwd` 改成目标，`is_playground` 改 0。
-- 分组移到任务：`is_playground` 改 1，`cwd` 不变。
+- 新分组以 `spaces` 行为准，任务通过 `sessions.space_id` 归属。
+- 任务移到分组：`space_id` 写成目标分组 ID，`cwd` 改成目标路径，`is_playground` 改 `0`。
+- 任务移到顶部：`space_id` 置 `NULL`，`is_playground` 改 `1`，`cwd` 保持不变。
+- 没有 `spaces` 行的旧分组仍按 `cwd` 兼容读取；本技能新建分组时会写入 `spaces` 表。
 
 ## 路径编码
 
@@ -121,19 +140,19 @@ WHERE is_playground = 0 AND deleted_at IS NULL;
 
 ## 分组创建
 
-WorkBuddy 没有独立的 workspace 表；分组由 `is_playground=0` 的任务 `cwd` 派生。要新建一个分组：
+分组以 `spaces` 表为准。要新建一个分组：
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py move --session <sid> --to "D:/VMs" --create-space
+python <skill-dir>/scripts/workbuddy_tasks.py move --task <sid> --to "D:/VMs" --create-group
 ```
 
-目录默认必须已存在；确认要新建目录时加 `--allow-missing`。首个迁入的任务成为分组种子，不存在“空分组”这种形态。
+目录默认必须已存在；确认要新建目录时加 `--allow-missing`。技能会写入 `spaces` 表（名称取路径末段，来源 `seed`），并以首个迁入任务作为种子；旧版没有 `spaces` 表时退回 `is_playground=0` + `cwd` 的兼容模型。
 
 ## 迁移：默认搬全套
 
 `move` 默认做：
 
-1. `sessions.cwd` 改为目标分组，`is_playground` 置 `0`（或任务模式置 `1`）；
+1. `sessions.space_id` 写成目标分组 ID，`sessions.cwd` 改为目标分组路径，`is_playground` 置 `0`；任务模式则 `space_id=NULL`、`is_playground=1`；
 2. 移动 `projects/<encoded-cwd>/<sid>.jsonl` 与同名子目录；
 3. 搬该任务写入的源分组记忆段落，按日期追加到目标分组记忆；
 4. 搬产出文件，并在旧路径保留硬链接/副本；
@@ -171,6 +190,8 @@ JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径�
   "to_cwd": "…",
   "old_is_playground": 0,
   "new_is_playground": 0,
+  "old_space_id": "…",
+  "new_space_id": "…",
   "db_changed": true,
   "session": {
     "src_jsonl": "…", "dst_jsonl": "…",
@@ -235,8 +256,8 @@ JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径�
 每条分组迁移至少验证：
 
 ```sql
-SELECT cwd, is_playground FROM sessions WHERE id = '<session-id>';
--- cwd 必须等于目标分组原值；is_playground 必须为 0
+SELECT cwd, is_playground, space_id FROM sessions WHERE id = '<session-id>';
+-- cwd 必须等于目标分组路径；is_playground=0；space_id 必须等于目标 spaces.id（任务模式为 NULL）
 ```
 
 文件：
@@ -257,9 +278,9 @@ SELECT cwd, is_playground FROM sessions WHERE id = '<session-id>';
 ## 已知坑
 
 1. **只改快照不改数据库**：重启后被数据库覆盖，侧栏回到旧分组。
-2. **只改 `cwd` 不改 `is_playground`**：任务仍留在顶部“任务”区。
+2. **只改 `cwd` / `is_playground` 不改 `space_id`**：新版 WorkBuddy 仍按 `spaces` 表归属，任务会留在旧分组。
 3. **只改数据库不移动 JSONL**：应用按新 cwd 找正文，任务读不到。
-4. **把任务临时目录当分组**：它没有 `is_playground=0` 任务，不是分组。
+4. **把任务临时目录当分组**：它不在 `spaces` 表，也没有 `is_playground=0` 任务，不是分组。
 5. **直接覆盖目标同名任务文件**：会丢目标原有任务；必须先备份再写。
 6. **跨盘硬链接失败**：`os.link` 会报错；回退复制，报告里注明。
 7. **记忆整文件移动**：会带走其他任务的内容；必须按 hunk 精确段落搬。默认迁移即会搬记忆；只要元数据时加 `--metadata-only`。

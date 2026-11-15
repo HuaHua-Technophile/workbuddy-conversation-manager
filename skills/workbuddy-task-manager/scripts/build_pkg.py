@@ -3,9 +3,9 @@
 """打包成两个市场上架用的 zip。
 
 - -root：zip 根目录直接是 SKILL.md（部分市场要求此形态）
-- -dir：单层目录 workbuddy-conversation-manager/，内含 SKILL.md（另一些市场要求此形态）
+- -dir：单层目录 workbuddy-task-manager/，内含 SKILL.md（另一些市场要求此形态）
 
-用法：python skills/workbuddy-conversation-manager/scripts/build_pkg.py [--out dist]
+用法：python skills/workbuddy-task-manager/scripts/build_pkg.py [--out dist]
 """
 import argparse
 import os
@@ -13,8 +13,8 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # skills/<name>/
 REPO = os.path.dirname(os.path.dirname(ROOT))                        # 仓库根
-NAME = "workbuddy-conversation-manager"
-VERSION = "1.4.2"
+NAME = "workbuddy-task-manager"
+VERSION = "1.5.0"
 
 FILES = ["SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "PUBLISHING.md"]
 DIRS = ["scripts", "references", "examples"]

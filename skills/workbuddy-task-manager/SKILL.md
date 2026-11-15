@@ -1,11 +1,11 @@
 ---
-slug: workbuddy-conversation-manager
+slug: workbuddy-task-manager
 displayName: WorkBuddy任务管理
 summary: 管理 WorkBuddy 本地任务与分组：按完整历史两步式重命名、任务/分组迁移（含记忆与产出）、备份回滚、10 项体检。默认干跑并按对象备份。
-iconUrl: https://cdn.jsdelivr.net/gh/HuaHua-Technophile/workbuddy-conversation-manager@main/skills/workbuddy-conversation-manager/assets/icon-512.png
+iconUrl: https://cdn.jsdelivr.net/gh/HuaHua-Technophile/workbuddy-task-manager@main/skills/workbuddy-task-manager/assets/icon-512.png
 category: dev-programming
-homepage: https://github.com/HuaHua-Technophile/workbuddy-conversation-manager
-name: workbuddy-conversation-manager
+homepage: https://github.com/HuaHua-Technophile/workbuddy-task-manager
+name: workbuddy-task-manager
 description: 管理本机 WorkBuddy 的任务：体检、列表筛选、两步式重命名（导出完整历史/导入标题）、迁移任务/分组、整库备份与回滚。用于「重命名 WorkBuddy 任务、给任务改标题、整理任务名称、移动任务、换分组、把任务放到某个分组、列出 WorkBuddy 任务、WorkBuddy 体检、备份 WorkBuddy 数据」等请求；只操作本机 ~/.workbuddy 数据。
 description_zh: 管理 WorkBuddy 本地任务：体检、筛选、两步式重命名、任务/分组迁移、备份回滚；默认干跑，按对象备份。
 description_en: Manage local WorkBuddy tasks — doctor, list/filter, two-step rename from full transcripts, move between tasks/groups, backup & rollback; dry-run by default with per-object backups.
@@ -21,7 +21,7 @@ examples_en:
   - "Move NAS-related tasks into the NAS group with memory and outputs"
   - "Create a D:/VMs group and move VM tasks into it"
 author: HuaHua
-version: 1.4.2
+version: 1.5.0
 tags: [WorkBuddy, 任务管理, 分组, 重命名, 迁移, SQLite]
 license: MIT
 ---
@@ -48,7 +48,7 @@ Manage local WorkBuddy tasks: doctor, list/filter, two-step rename from full tra
 ## 核心事实
 
 - 数据库：`~/.workbuddy/workbuddy.db`（WAL 模式）；可用 `--workbuddy-home` 指向副本做演练。
-- 任务表 `sessions`：`cwd` 决定分组归属，`is_playground` 区分 `1=任务` / `0=分组`。
+- 数据表：`sessions` 存任务、`spaces` 存分组；`sessions.space_id` 指向 `spaces.id`，`is_playground` 仍区分 `1=任务` / `0=分组`。
 - 任务正文：`~/.workbuddy/projects/<encoded-cwd>/<session-id>.jsonl`；子代理、工具结果在同名目录。
 - 标题三层：JSONL 最后一条 `custom-title` 事件是有效标题；数据库 `title` / `custom_title` 和侧栏快照 `title` 是展示与缓存层，三层要一起写。
 - 产出识别三路：`artifact-index`、`changes-index` 详情、JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`；正文解析必须在搬走 JSONL 之前完成。
@@ -56,12 +56,12 @@ Manage local WorkBuddy tasks: doctor, list/filter, two-step rename from full tra
 - 本机可能有多个 `user_id`；`list` / `rename --export` / `rename --import` 用 `--all-users` 覆盖全部账号。
 - 迁移默认同时搬任务 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致任务读不到；只要元数据时加 `--metadata-only`。
 - 搬完后源项目目录若已无任何 `*.jsonl`，默认自动删除；`--keep-orphans` 保留。删除清单写入 `batch.json` 的 `removed_dirs`。
-- 分组由 `is_playground=0` 的任务 `cwd` 派生；目标分组不存在时用 `move --create-space --to <绝对路径>` 创建，首个迁入任务作为种子。
+- 分组优先读 `spaces` 表；旧数据没有 `space_id` 时回退到 `is_playground=0` 的 `cwd`。新建分组会写入 `spaces` 表，首个迁入任务作为种子。
 - 备份目录自动去重，同名或同一秒追加时间戳；文本文件用临时文件 + `os.replace` 原子写入。
 
 ## 安装与验证
 
-仓库按 `skills/workbuddy-conversation-manager/` 组织，根目录有 `install.py`；宿主需要扁平技能目录：
+仓库按 `skills/workbuddy-task-manager/` 组织，根目录有 `install.py`；宿主需要扁平技能目录：
 
 ```bash
 python install.py --targets all
@@ -72,16 +72,16 @@ python install.py --to ~/.qoder/skills
 安装后的扁平目录：
 
 ```
-~/.qoder/skills/workbuddy-conversation-manager/
-~/.workbuddy/skills/workbuddy-conversation-manager/
-~/.agents/skills/workbuddy-conversation-manager/
+~/.qoder/skills/workbuddy-task-manager/
+~/.workbuddy/skills/workbuddy-task-manager/
+~/.agents/skills/workbuddy-task-manager/
 ```
 
 验证：
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py doctor
-python <skill-dir>/scripts/workbuddy_sessions.py doctor --deep
+python <skill-dir>/scripts/workbuddy_tasks.py doctor
+python <skill-dir>/scripts/workbuddy_tasks.py doctor --deep
 ```
 
 10 项全 `OK` 说明可用；`--deep` 额外核对 JSONL 最后一条 custom-title。`WorkBuddy 进程` 只是提示项，运行中也允许热写。
@@ -93,8 +93,8 @@ python <skill-dir>/scripts/workbuddy_sessions.py doctor --deep
 ### doctor
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py doctor
-python <skill-dir>/scripts/workbuddy_sessions.py doctor --deep --json
+python <skill-dir>/scripts/workbuddy_tasks.py doctor
+python <skill-dir>/scripts/workbuddy_tasks.py doctor --deep --json
 ```
 
 退出码：`0` 全绿；`1` 有告警。
@@ -102,21 +102,21 @@ python <skill-dir>/scripts/workbuddy_sessions.py doctor --deep --json
 ### list
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py list --all-users
-python <skill-dir>/scripts/workbuddy_sessions.py list --keyword Qoder --area task --since 2026-11-01
-python <skill-dir>/scripts/workbuddy_sessions.py list --cwd NAS --include-deleted --limit 20
+python <skill-dir>/scripts/workbuddy_tasks.py list --all-users
+python <skill-dir>/scripts/workbuddy_tasks.py list --keyword Qoder --area task --since 2026-11-01
+python <skill-dir>/scripts/workbuddy_tasks.py list --cwd NAS --include-deleted --limit 20
 ```
 
-筛选维度：`--all-users`、`--keyword`、`--cwd`、`--since`、`--area task|space|all`、`--include-deleted`、`--limit`。
+筛选维度：`--all-users`、`--keyword`、`--cwd`、`--since`、`--area task|group|all`（`space` 为兼容别名）、`--include-deleted`、`--limit`。
 
 ### rename（两步式）
 
 第一步，导出完整历史并自动分片：
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py rename --export --all-users --shards 8 --out ./wb-exp
+python <skill-dir>/scripts/workbuddy_tasks.py rename --export --all-users --shards 8 --out ./wb-exp
 # 可限定范围
-python <skill-dir>/scripts/workbuddy_sessions.py rename --export --area space --keyword NAS --shards 4 --out ./wb-exp
+python <skill-dir>/scripts/workbuddy_tasks.py rename --export --area group --keyword NAS --shards 4 --out ./wb-exp
 ```
 
 产出：
@@ -141,10 +141,10 @@ python <skill-dir>/scripts/workbuddy_sessions.py rename --export --area space --
 
 ```bash
 # 默认干跑：只打印 [PLAN]，不写库
-python <skill-dir>/scripts/workbuddy_sessions.py rename --import titles.json
+python <skill-dir>/scripts/workbuddy_tasks.py rename --import titles.json
 
 # 确认后落盘
-python <skill-dir>/scripts/workbuddy_sessions.py rename --import titles.json --apply \
+python <skill-dir>/scripts/workbuddy_tasks.py rename --import titles.json --apply \
   --backup-dir ./workbuddy-rename-backup
 ```
 
@@ -163,10 +163,10 @@ python <skill-dir>/scripts/workbuddy_sessions.py rename --import titles.json --a
 
 ```bash
 # 默认：改归属 + 搬任务 JSONL/子目录 + 搬该任务的记忆段落与产出
-python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
+python <skill-dir>/scripts/workbuddy_tasks.py move --task 6ed7f61f --to "X:/赞大拇指"
 
 # 只要元数据，不搬记忆与产出
-python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
+python <skill-dir>/scripts/workbuddy_tasks.py move --task 6ed7f61f --to "X:/赞大拇指" --metadata-only
 ```
 
 分组模式会同步：
@@ -182,16 +182,16 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X
 
 搬空的源项目目录默认自动删除，`--keep-orphans` 保留，删除清单写入 `batch.json` 的 `removed_dirs`。
 
-目标分组不存在时加 `--create-space`；目标目录必须已存在，确认要新建目录时再加 `--allow-missing`。
+目标分组不存在时加 `--create-group`；目标目录必须已存在，确认要新建目录时再加 `--allow-missing`。
 
 每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、任务文件、记忆、产出和快照。
 
 ### backup / rollback
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py backup --list
-python <skill-dir>/scripts/workbuddy_sessions.py backup --keep 10
-python <skill-dir>/scripts/workbuddy_sessions.py backup --backup-dir D:/wb-backups
+python <skill-dir>/scripts/workbuddy_tasks.py backup --list
+python <skill-dir>/scripts/workbuddy_tasks.py backup --keep 10
+python <skill-dir>/scripts/workbuddy_tasks.py backup --backup-dir D:/wb-backups
 ```
 
 默认写到当前目录 `workbuddy-backups/db/<timestamp>/`，含 `workbuddy.db`、WAL/SHM（存在时）和 `meta.json`；默认保留最近 10 份。快照用于手工恢复或破坏性操作前锚点，不自动回滚。
@@ -199,9 +199,9 @@ python <skill-dir>/scripts/workbuddy_sessions.py backup --backup-dir D:/wb-backu
 迁移回滚：
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py rollback \
+python <skill-dir>/scripts/workbuddy_tasks.py rollback \
   --manifest "<backup>/<sid>/manifest.json"
-python <skill-dir>/scripts/workbuddy_sessions.py rollback --batch "<backup>/batch.json"
+python <skill-dir>/scripts/workbuddy_tasks.py rollback --batch "<backup>/batch.json"
 ```
 
 ### 旧命令
@@ -229,13 +229,13 @@ rename --import titles.json --apply      # 落盘
 
 ```bash
 list --all-users
-move --session <sid> --to "D:/B/NAS"
+move --task <sid> --to "D:/B/NAS"
 # 默认连记忆/产出一起搬；只要元数据加 --metadata-only
 
 # 目标分组不存在时，用首个迁入任务创建分组
-python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
+python <skill-dir>/scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-group
 # 目录不存在且确认创建时
-python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
+python <skill-dir>/scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-group --allow-missing
 ```
 
 ## 安全规则
@@ -271,9 +271,9 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D
 | 产出只搬到了旧索引里的少数文件 | 只依赖 `artifact-index`/`changes-index` | 1.4.0 起会补 JSONL `Write`/`Edit` 路径；确认 JSONL 仍在源目录后再搬 |
 | 仓库根没有 SKILL.md | 仓库是 `skills/<name>/` 结构，宿主要扁平目录 | 运行 `python install.py --targets all` |
 | doctor 提示标题不一致 | 应用缓存未重建 | 重启应用；仍不一致则重跑导入 |
-| 找不到目标分组 | 目标没有 `is_playground=0` 的任务 | 加 `--create-space`，或先在 WorkBuddy 里打开该分组 |
+| 找不到目标分组 | 目标不在 `spaces` 表，且没有 legacy cwd | 加 `--create-group`，或先在 WorkBuddy 里打开该分组 |
 | 想新建空分组 | WorkBuddy 分组由任务 cwd 派生 | 先迁入一条种子任务；不存在空分组 |
-| `--create-space` 报目录不存在 | 默认要求目标目录已存在 | 确认路径后加 `--allow-missing` |
+| `--create-group` 报目录不存在 | 默认要求目标目录已存在 | 确认路径后加 `--allow-missing` |
 | 迁移后旧项目目录还在 | 加了 `--keep-orphans`，或目录里还有其他任务 | 去掉该参数重跑；有任务的目录不会删 |
 | 备份目录带时间戳后缀 | 同名或同一秒已存在 | 正常保护行为，用最新目录 |
 | 子智能体漏条 | 清单没对齐 | 用 `manifest.json` 的 sid 做差集核对 |

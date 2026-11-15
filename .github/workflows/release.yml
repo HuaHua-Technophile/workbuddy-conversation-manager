@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v1.4.2)'
+        description: 'Tag to release (e.g. v1.5.0)'
         required: true
         type: string
 
@@ -43,21 +43,21 @@ jobs:
           python - <<'PY'
           import os, pathlib, re, sys
           tag = os.environ['TAG_VERSION']
-          root = pathlib.Path('skills/workbuddy-conversation-manager')
+          root = pathlib.Path('skills/workbuddy-task-manager')
           skill = re.search(r'^version:\s*(\S+)', (root / 'SKILL.md').read_text(), re.M).group(1)
           pkg = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/build_pkg.py').read_text()).group(1)
-          sessions = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/workbuddy_sessions.py').read_text()).group(1)
+          sessions = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/workbuddy_tasks.py').read_text()).group(1)
           print(f'tag={tag} SKILL.md={skill} build_pkg={pkg} sessions={sessions}')
           if not (tag == skill == pkg == sessions):
-              print('::error::版本号不一致：先在 SKILL.md / workbuddy_sessions.py / build_pkg.py 里同步到 ' + tag + ' 再打 tag', file=sys.stderr)
+              print('::error::版本号不一致：先在 SKILL.md / workbuddy_tasks.py / build_pkg.py 里同步到 ' + tag + ' 再打 tag', file=sys.stderr)
               sys.exit(1)
           PY
 
       - name: Doctor (sanity check script imports)
-        run: python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py --version
+        run: python skills/workbuddy-task-manager/scripts/workbuddy_tasks.py --version
 
       - name: Build packages
-        run: python skills/workbuddy-conversation-manager/scripts/build_pkg.py
+        run: python skills/workbuddy-task-manager/scripts/build_pkg.py
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -115,10 +115,10 @@ jobs:
           # assets/ 只是仓库与 README 的展示图，不属于技能内容；
           # SkillHub 不接受 png 等二进制文件，直接打包会被拒。
           rm -rf /tmp/pub && mkdir -p /tmp/pub
-          cp -r skills/workbuddy-conversation-manager /tmp/pub/
-          rm -rf /tmp/pub/workbuddy-conversation-manager/assets
+          cp -r skills/workbuddy-task-manager /tmp/pub/
+          rm -rf /tmp/pub/workbuddy-task-manager/assets
           echo "打包内容："
-          find /tmp/pub/workbuddy-conversation-manager -type f | sed 's|/tmp/pub/||' | sort
-          skillhub publish /tmp/pub/workbuddy-conversation-manager \
+          find /tmp/pub/workbuddy-task-manager -type f | sed 's|/tmp/pub/||' | sort
+          skillhub publish /tmp/pub/workbuddy-task-manager \
             --host https://api.skillhub.cn \
             --changelog "$CHANGELOG"

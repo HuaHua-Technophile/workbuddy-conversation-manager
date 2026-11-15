@@ -20,16 +20,16 @@
 ### 1. 体检并导出
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py doctor
-python <skill-dir>/scripts/workbuddy_sessions.py backup
-python <skill-dir>/scripts/workbuddy_sessions.py rename --export --all-users --shards 8 --out ./wb-exp
+python <skill-dir>/scripts/workbuddy_tasks.py doctor
+python <skill-dir>/scripts/workbuddy_tasks.py backup
+python <skill-dir>/scripts/workbuddy_tasks.py rename --export --all-users --shards 8 --out ./wb-exp
 ```
 
 可限定范围：
 
 ```bash
-python <skill-dir>/scripts/workbuddy_sessions.py rename --export \
-  --area space --keyword NAS --since 2026-11-01 --shards 4 --out ./wb-exp
+python <skill-dir>/scripts/workbuddy_tasks.py rename --export \
+  --area group --keyword NAS --since 2026-11-01 --shards 4 --out ./wb-exp
 ```
 
 生成：
@@ -87,10 +87,10 @@ Agent 类型：默认 `general-purpose` 可能被禁用，可改用 `【示例�
 
 ```bash
 # 只打印 [PLAN]，不写库
-python <skill-dir>/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json
+python <skill-dir>/scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.json
 
 # 确认后落盘
-python <skill-dir>/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply \
+python <skill-dir>/scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.json --apply \
   --backup-dir ./workbuddy-rename-backup
 ```
 
