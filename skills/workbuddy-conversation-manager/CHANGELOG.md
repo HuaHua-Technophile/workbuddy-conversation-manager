@@ -7,6 +7,7 @@
 - frontmatter 增加 `examples_zh` / `examples_en` / `author`；头像改为官方 WorkBuddy 图标 + 会话徽标组合，提供 256/512/1024 多尺寸。
 - 仓库重构为 `skills/<name>/` + 根 `install.py`，便于 skills.sh 等目录索引；宿主仍安装为扁平技能目录。
 - `PUBLISHING.md` 更正 skills.sh 状态为未收录/待复核，补充 WorkBuddy/Qoder 市场提交材料。
+- 2026-11-15 已通过 GitHub 导入发布到 SkillHub（v1.4.0，安全审核中）；WorkBuddy 开放平台首次提交被收回，当日提审配额已满，次日重新提交。
 
 ## 1.3.0 — 2026-11-15
 

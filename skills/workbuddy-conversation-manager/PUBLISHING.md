@@ -8,8 +8,8 @@
 |---|---|---|
 | GitHub | ✅ 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager) · [v1.4.0 Release](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases/tag/v1.4.0)，MIT，含 `-root` / `-dir` 两个安装包 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录/待复核 | 2026-11-15 复核页面为 404。该站没有手动提交入口，按 `npx skills add` 安装量索引；仓库已改为 `skills/<name>/` 布局，需重新检查索引状态。`skills list -g` 显示 tracked 不等于 skills.sh 已收录。 |
-| WorkBuddy 开放平台 | 🕒 审核中 | 2026-11-15 已提交 `-dir` 包，技能 ID `os_d12a959583509f94`，预计 7 个工作日。 |
-| SkillHub（腾讯） | ⏳ 待提交（GitHub 导入） | 绑定 GitHub 后可直接识别 `skills/<name>/`，无需本地上传 zip。slug `workbuddy-conversation-manager`，版本 1.4.0。 |
+| WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满，2026-11-16 重新提交 `-dir` 包。技能 ID `os_d12a959583509f94`。 |
+| SkillHub（腾讯） | 🕒 审核中 | 2026-11-15 通过 GitHub 导入发布，slug `workbuddy-conversation-manager`，版本 1.4.0，安全审核中。 |
 | Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布，机审。使用 `-dir` 包。 |
 | skillstore.io / Skill Vault | ⏳ 可选 | 第三方目录，填仓库地址或上传 SKILL.md。 |
 
@@ -112,6 +112,7 @@ WorkBuddy/Qoder 市场解析 `SKILL.md` 时会检查以下字段：
 4. 平台自动解析 frontmatter；缺字段会拒绝。
 5. 上传头像 `assets/icon-512.png`，补充分类与使用说明。
 6. 提交审核；当日 5 次 / 当月 20 次提审配额。
+7. 2026-11-15 实测：首次提交后状态变为「已收回」，同日配额已用满 5/5，页面提示次日再提交；重新提交前先查「收回原因」。
 
 ## 渠道二：SkillHub
 
