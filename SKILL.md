@@ -6,7 +6,7 @@ description_en: Manage local WorkBuddy sessions — doctor, list/filter, two-ste
 display_name: WorkBuddy Conversation Manager
 display_name_zh: WorkBuddy会话管理
 display_name_en: WorkBuddy Conversation Manager
-version: 1.0.0
+version: 1.1.0
 tags: [WorkBuddy, 会话管理, 重命名, 迁移, SQLite]
 license: MIT
 ---
@@ -23,7 +23,7 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 | `list` | 列出会话，支持关键词/cwd/时间/区域/账号筛选 | 否 |
 | `rename --export` | 导出完整对话历史，按字数 LPT 自动分片 | 否 |
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
-| `move` | 迁移会话到任务/空间；默认只改元数据并同步会话文件 | 是 |
+| `move` | 迁移会话到任务/空间；默认连记忆、产出和会话文件一起搬 | 是 |
 | `backup` | 整库快照，默认保留最近 10 份 | 否 |
 | `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
 | `extract` / `apply-titles` | 旧命令，保留兼容；建议改用 `rename` | 部分 |
@@ -38,7 +38,7 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 - 标题三层：JSONL 最后一条 `custom-title` 事件是有效标题；数据库 `title` / `custom_title` 和侧栏快照 `title` 是展示与缓存层，三层要一起写。
 - 侧栏快照：`~/.workbuddy/<user-id>/sidebar-list-snapshot.json`；应用启动会按数据库重建。
 - 本机可能有多个 `user_id`；`list` / `rename --export` / `rename --import` 用 `--all-users` 覆盖全部账号。
-- 迁移默认只改元数据，并同步**必要的**会话 JSONL/子目录。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致对话读不到；记忆与产出不再默认搬。
+- 迁移默认同时搬会话 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致对话读不到；只要元数据时加 `--metadata-only`。
 - 备份目录自动去重，同名或同一秒追加时间戳；文本文件用临时文件 + `os.replace` 原子写入。
 
 ## 安装与验证
@@ -136,22 +136,23 @@ python <skill-dir>/scripts/workbuddy_sessions.py rename --import titles.json --a
 ### move
 
 ```bash
-# 默认：只改元数据 + 移动必要的会话 JSONL/子目录，不搬记忆与产出
+# 默认：改归属 + 搬会话 JSONL/子目录 + 搬该会话的记忆段落与产出
 python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
 
-# 保留旧行为：同时搬记忆与产出文件
-python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --with-assets
+# 只要元数据，不搬记忆与产出
+python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
 ```
 
 空间模式会同步：
 
 1. `sessions.cwd` 与 `is_playground`；
 2. `projects/<encoded-cwd>/<sid>.jsonl` 与同名子目录（正文路径由 cwd 推导，必须同步）；
-3. 侧栏快照 `space.name`。
+3. 该会话写入的源工作空间记忆段落、产出文件及其旧路径链接；
+4. 侧栏快照 `space.name`。
 
-默认**不**迁移 `<workspace>/.workbuddy/memory/` 与产出文件；需要时加 `--with-assets`。任务模式只改 `is_playground=1`，不动 cwd 与文件。
+默认迁移记忆与产出；只要元数据时加 `--metadata-only`。任务模式只改 `is_playground=1`，不动 cwd 与文件。
 
-每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、会话文件、快照和可选记忆/产出。
+每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、会话文件、记忆、产出和快照。
 
 ### backup / rollback
 
@@ -197,7 +198,7 @@ rename --import titles.json --apply      # 落盘
 ```bash
 list --all-users
 move --session <sid> --to "D:/B/NAS"
-# 需要连记忆/产出一起搬时加 --with-assets
+# 默认连记忆/产出一起搬；只要元数据加 --metadata-only
 ```
 
 ## 安全规则
@@ -206,7 +207,7 @@ move --session <sid> --to "D:/B/NAS"
 - 写操作默认允许热写；要强制应用退出加 `--require-closed`，退出码 `3`。
 - 每条迁移/重命名独立事务；失败只影响该条，其余继续。
 - 重命名按批次备份数据库、目标 JSONL 和两个账号的侧栏快照；旧标题只进 `rename-manifest.json`。
-- 迁移每条约一份 manifest；记录数据库行、会话文件、快照和可选记忆/产出。
+- 迁移每条约一份 manifest；记录数据库行、会话文件、记忆、产出和快照。
 - 目标已有同名会话文件/产出文件时先备份，不覆盖。
 - 已删除会话默认跳过；`--include-deleted` 只用于查看。
 - 子智能体只提案，不直接写库；写入由主智能体统一执行。
@@ -216,7 +217,7 @@ move --session <sid> --to "D:/B/NAS"
 - 不删除会话、不改对话正文、不重建搜索索引。
 - 只处理本机 `~/.workbuddy` 的本地会话；云端或其他设备会话不在范围内。
 - 只支持 Windows（依赖 `tasklist`、本地路径与侧栏快照目录约定）。
-- 默认迁移不搬记忆与产出；需要时显式 `--with-assets`。
+- 默认迁移会搬记忆与产出；只要元数据时显式 `--metadata-only`。
 - 标题长度、分类清单、是否覆盖自定义标题由调用方决定，技能不内置固定类目。
 
 ## 常见错误
@@ -229,7 +230,7 @@ move --session <sid> --to "D:/B/NAS"
 | 标题被拒绝 | 长度不在 10–30、缺少前缀、含禁用字符 | 调整标题或分类后重跑 |
 | `--require-closed` 返回 3 | WorkBuddy 正在运行 | 退出应用后重跑，或去掉该参数 |
 | 迁移后对话打不开 | 只改了数据库 cwd，JSONL 没跟着移动 | 用本技能 `move`，它会同改 DB 与 JSONL；不要手工只改库 |
-| 迁移后记忆/产出没跟过去 | 默认只改元数据 | 加 `--with-assets` 重跑，或手工迁移 |
+| 迁移后记忆/产出没跟过去 | 使用了 `--metadata-only` | 去掉该参数重跑，或手工迁移 |
 | doctor 提示标题不一致 | 应用缓存未重建 | 重启应用；仍不一致则重跑导入 |
 | 找不到目标空间 | 目标没有 `is_playground=0` 的会话 | 先在 WorkBuddy 里打开该空间 |
 | 备份目录带时间戳后缀 | 同名或同一秒已存在 | 正常保护行为，用最新目录 |

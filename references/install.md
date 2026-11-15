@@ -16,7 +16,7 @@ workbuddy-conversation-manager/
 - 不需要 `pip install`。
 - 需要 Python 3.9+；先确认 `python --version`。
 - 需要对 `~/.workbuddy` 的读写权限、目标工作空间的写权限。
-- 默认迁移只改元数据并同步会话文件；只有加 `--with-assets` 才需要产出文件的源/目标同盘或跨盘复制。
+- 默认迁移会连记忆与产出一起搬；只要元数据时加 `--metadata-only`。产出文件跨盘时脚本会回退复制。
 
 ## Qoder
 

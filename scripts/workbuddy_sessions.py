@@ -5,8 +5,8 @@
 重命名：rename --export 导出完整历史与 LPT 分片 → agent 产出 titles.json →
 rename --import 默认干跑，加 --apply 落盘。默认标题长度 20–30 字，可放宽到 10–30。
 
-迁移：默认只改元数据并同步必要的会话 JSONL/子目录，不搬记忆与产出；
-需要旧行为时加 --with-assets。
+迁移：默认同时迁移记忆与产出，并同步必要的会话 JSONL/子目录；
+只要元数据时加 --metadata-only。
 
 核心事实：
 - 侧栏的「任务 / 空间」由 sessions.is_playground 决定：1=任务，0=空间。
@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 
@@ -1891,13 +1891,16 @@ def build_parser():
     mv.add_argument("--to", action="append", default=[], help="目标空间路径/名称；可重复")
     mv.add_argument("--mode", choices=["space", "task"], default="space")
     mv.add_argument("--backup-dir", default=None)
-    mv.add_argument("--with-assets", action="store_true",
-                    help="同时迁移记忆与产出（默认只改元数据并同步会话文件）")
-    mv.add_argument("--no-artifacts", action="store_true", help="配合 --with-assets 时跳过产出")
+    asset_group = mv.add_mutually_exclusive_group()
+    asset_group.add_argument("--with-assets", dest="with_assets", action="store_true",
+                             help="迁移记忆与产出（默认）")
+    asset_group.add_argument("--metadata-only", dest="with_assets", action="store_false",
+                             help="只改元数据并同步会话文件，不搬记忆与产出")
+    mv.add_argument("--no-artifacts", action="store_true", help="迁移记忆但跳过产出")
     mv.add_argument("--no-running-check", dest="running_check", action="store_false", help="不检测 WorkBuddy 是否运行")
     mv.add_argument("--require-closed", action="store_true", help="WorkBuddy 运行时拒绝写入并返回退出码 3")
     mv.add_argument("--json", action="store_true")
-    mv.set_defaults(func=cmd_move, running_check=True, with_assets=False)
+    mv.set_defaults(func=cmd_move, running_check=True, with_assets=True)
 
     rb = sub.add_parser("rollback", help="按清单回滚")
     rb.add_argument("--manifest", action="append", default=[])

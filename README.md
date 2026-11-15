@@ -22,7 +22,7 @@ WorkBuddy 侧栏标题通常只反映首条消息，长对话真正的落点在�
 | `list` | 关键词/cwd/时间/区域/账号筛选 | 否 |
 | `rename --export` | 导出完整历史，按字数 LPT 自动分片 | 否 |
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
-| `move` | 迁移任务/空间；默认只改元数据并同步会话文件 | 是 |
+| `move` | 迁移任务/空间；默认连记忆、产出和会话文件一起搬 | 是 |
 | `backup` | 整库快照，默认保留最近 10 份 | 否 |
 | `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
 
@@ -66,14 +66,14 @@ python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --appl
 ## 迁移
 
 ```bash
-# 默认：只改 DB 归属/任务标志，并同步必要的会话 JSONL/子目录
+# 默认：改归属 + 搬会话 JSONL/子目录 + 搬该会话的记忆段落与产出
 python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
 
-# 需要连记忆和产出一起搬时
-python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --with-assets
+# 只要元数据，不搬记忆与产出
+python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
 ```
 
-WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，但不搬记忆和产出。
+WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，并迁移该会话的记忆和产出。
 
 ## 安全设计
 
@@ -82,7 +82,7 @@ WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读
 - **每条独立事务**：某条失败只影响它自己，其余继续。
 - **热写可选**：允许 WorkBuddy 运行中写入；要硬性拦截加 `--require-closed`（退出码 3）。
 - **副本演练**：`--workbuddy-home` 可指向数据库副本，与真库互不影响。
-- **只改元数据**：默认不碰记忆与产出；需要时显式 `--with-assets`。
+- **默认搬全套**：归属、会话文件、记忆、产出一起迁移；只要元数据时用 `--metadata-only`。
 - **不覆盖**：目标已有同名文件先备份；备份目录自动去重。
 
 ## 安装
@@ -129,7 +129,7 @@ python "$HOME/.qoder/skills/workbuddy-conversation-manager/scripts/workbuddy_ses
 - 仅支持 **Windows**。
 - 只操作本机 `~/.workbuddy` 的本地会话。
 - 不删除会话、不改对话正文、不重建搜索索引。
-- 默认迁移不搬记忆与产出；需要时加 `--with-assets`。
+- 默认迁移会搬记忆与产出；只要元数据时加 `--metadata-only`。
 
 ## 环境要求
 

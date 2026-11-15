@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-11-15
+
+- `move` 默认恢复为同时迁移记忆与产出，并同步会话文件；新增 `--metadata-only` 只改元数据。
+- 迁移 manifest 的 `metadata_only` 默认改为 `false`；`--no-artifacts` 仍可在搬记忆时跳过产出。
+- 文档与发布物同步更新到 1.1.0。
+
 ## 1.0.0 — 2026-11-15
 
 首次公开发布，由内部技能 `workbuddy-move-conversation` 重命名并重构。

@@ -119,22 +119,19 @@ WHERE is_playground = 0 AND deleted_at IS NULL;
 
 用户消息需要去掉 `system-reminder`、`turn_aborted`、`<user_query>` 包装；`task-notification` 是后台任务通知，不是用户诉求，跳过。
 
-## 迁移：默认只改元数据
+## 迁移：默认搬全套
 
-`move` 默认只做：
+`move` 默认做：
 
 1. `sessions.cwd` 改为目标空间，`is_playground` 置 `0`（或任务模式置 `1`）；
 2. 移动 `projects/<encoded-cwd>/<sid>.jsonl` 与同名子目录；
-3. 侧栏快照该 item 的 `space.name` 改为目标路径。
+3. 搬该会话写入的源工作空间记忆段落，按日期追加到目标工作空间记忆；
+4. 搬产出文件，并在旧路径保留硬链接/副本；
+5. 侧栏快照该 item 的 `space.name` 改为目标路径。
 
-为什么必须移动 JSONL：应用按 `cwd` 推导正文路径（`projects/<encoded-cwd>/<sid>.jsonl`）；只改数据库会导致对话读不到。这是“只改元数据”的必要伴随动作。
+为什么必须移动 JSONL：应用按 `cwd` 推导正文路径（`projects/<encoded-cwd>/<sid>.jsonl`）；只改数据库会导致对话读不到。
 
-默认**不**迁移：
-
-- `<workspace>/.workbuddy/memory/` 记忆段落；
-- `artifact-index` / `changes-index` 登记的产出文件。
-
-需要旧行为时加 `--with-assets`。此时按 changes-index 的精确 hunk 搬记忆段落，按相对路径搬产出，并在旧路径保留硬链接/副本。
+只要元数据时加 `--metadata-only`：仍会改 DB、移动 JSONL/子目录、更新快照，但不碰记忆与产出。`--no-artifacts` 可在搬记忆时跳过产出。
 
 `MEMORY.md` 长期约定不改；需要时人工提炼。
 
@@ -149,7 +146,7 @@ WHERE is_playground = 0 AND deleted_at IS NULL;
   "version": 1,
   "session_id": "…",
   "mode": "space",
-  "metadata_only": true,
+  "metadata_only": false,
   "from_cwd": "…",
   "to_cwd": "…",
   "old_is_playground": 0,
@@ -225,8 +222,8 @@ SELECT cwd, is_playground FROM sessions WHERE id = '<session-id>';
 - `<目标项目目录>/<session-id>.jsonl` 存在；
 - 旧项目目录下该 `.jsonl` 不存在；
 - 源有会话子目录时，目标子目录存在且源子目录不存在；
-- 使用 `--with-assets` 时，产出目标文件存在，旧路径硬链接/副本存在；
-- 使用 `--with-assets` 时，源记忆不再包含搬走的段落，目标记忆含 `迁移自 ...（会话 ...）` 标记；
+- 默认模式下，产出目标文件存在，旧路径硬链接/副本存在；
+- 默认模式下，源记忆不再包含搬走的段落，目标记忆含 `迁移自 ...（会话 ...）` 标记；
 - 侧栏快照该 item 的 `space.name` 等于目标路径。
 
 重命名至少验证：
@@ -243,7 +240,7 @@ SELECT cwd, is_playground FROM sessions WHERE id = '<session-id>';
 4. **把任务临时目录当空间**：它没有 `is_playground=0` 会话，不是空间。
 5. **直接覆盖目标同名会话文件**：会丢目标原有对话；必须先备份再写。
 6. **跨盘硬链接失败**：`os.link` 会报错；回退复制，报告里注明。
-7. **记忆整文件移动**：会带走其他会话的内容；必须按 hunk 精确段落搬（仅 `--with-assets`）。
+7. **记忆整文件移动**：会带走其他会话的内容；必须按 hunk 精确段落搬。默认迁移即会搬记忆；只要元数据时加 `--metadata-only`。
 8. **应用运行中改快照**：应用可能重写；数据库正确即可，提示用户切换空间/重启。
 9. **标题模糊匹配**：必须列候选让用户选，不能默认取最新。
 10. **`workspaces.path` 误当权威**：它只记录最近打开目录，不决定分组。
