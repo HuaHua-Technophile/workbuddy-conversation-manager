@@ -8,7 +8,7 @@
 - 用户可见英文统一为 task / group；README、PUBLISHING、references 与 CI 路径同步更新。
 - 对齐 WorkBuddy 新版数据模型：分组优先读取 `spaces` 表，`move` 同步写 `sessions.space_id`；旧版没有 `space_id` 时回退到 `is_playground=0` + `cwd`。
 - WorkBuddy 内部数据库/接口的 `sessions`、`spaces`、`session_id`、`space_id`、`is_playground`、`conversation_origin` 等原始命名保留，不做破坏性修改。
-- README banner 重绘并更新到 v1.5.0；GitHub Release、SkillHub 与 WorkBuddy `-dir` 包使用 1.5.0。
+- README banner 改用 Pillow 脚本 `assets/draw_banner.py` 生成（1280×380，深绿渐变 + 网格 + 光晕/圆环 + 白色图标容器），更新到 v1.5.0；GitHub Release、SkillHub 与 WorkBuddy `-dir` 包使用 1.5.0。
 - SkillHub 新 slug 已上架（`skillId=322122`）；旧 slug 已下架并删除。
 
 ## 1.4.2 — 2026-11-15
