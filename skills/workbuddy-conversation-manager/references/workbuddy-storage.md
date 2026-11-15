@@ -139,6 +139,14 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session <sid> --to "D:/V
 4. 搬产出文件，并在旧路径保留硬链接/副本；
 5. 侧栏快照该 item 的 `space.name` 改为目标路径。
 
+产出识别三路合并：
+
+- `artifact-index/<sid>.json` 的 `file://` URI；
+- `changes-index` / `changes-detail` 里的 `create` / `modify` / `rename` 文件；
+- 会话 JSONL 的 `function_call` 中 `Write` / `Edit` 工具的 `file_path` / `notebook_path` / `path`。
+
+JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径，排除 `cwd/.workbuddy/`（记忆段落走记忆迁移）。
+
 为什么必须移动 JSONL：应用按 `cwd` 推导正文路径（`projects/<encoded-cwd>/<sid>.jsonl`）；只改数据库会导致对话读不到。
 
 只要元数据时加 `--metadata-only`：仍会改 DB、移动 JSONL/子目录、更新快照，但不碰记忆与产出。`--no-artifacts` 可在搬记忆时跳过产出。
@@ -266,3 +274,5 @@ SELECT cwd, is_playground FROM sessions WHERE id = '<session-id>';
 16. **Bash 反引号**：`python -c "..."` 里的反引号会被 shell 当命令替换执行；长脚本写成 `.py` 文件再运行。
 17. **子智能体并发写库**：多个子智能体直接改 SQLite/JSONL 会冲突；只让它们产出提案，主智能体统一写入。
 18. **路径编码双横线**：`X:/赞大拇指` 应编码为 `x-赞大拇指`，不是 `x--赞大拇指`；`:/` 要合并替换。
+19. **正文产出解析放在搬 JSONL 之后**：会永远解析不到 `Write`/`Edit`；必须在移动前抽取。
+20. **`function_call.arguments` 是 JSON 字符串**：WorkBuddy 的写文件参数不在 `input` 里，需解析 `arguments` 后的 `file_path`。

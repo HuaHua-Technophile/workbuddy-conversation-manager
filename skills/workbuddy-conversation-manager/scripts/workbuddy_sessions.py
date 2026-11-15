@@ -15,7 +15,7 @@ rename --import 默认干跑，加 --apply 落盘。默认标题长度 20–30 �
 - 侧栏缓存是 <home>/<user-id>/sidebar-list-snapshot.json；数据库才是权威。
 - 有效标题以 JSONL 最后一条 custom-title 事件为准；数据库 title/custom_title 与快照 title 同步写。
 - 记忆在 <workspace>/.workbuddy/memory/YYYY-MM-DD.md，变更范围从 changes-index 的 hunk 反推。
-- 产物在 artifact-index 与 changes-index 中登记；迁移后旧路径保留硬链接（跨盘回退复制）。
+- 产物三路：artifact-index、changes-index、JSONL function_call 的 Write/Edit；迁移后旧路径保留硬链接（跨盘回退复制）。
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 
@@ -579,7 +579,7 @@ class Mover:
         record["status"] = "moved"
         return record
 
-    def _collect_outputs(self, sid: str, old_cwd: Path):
+    def _collect_outputs(self, sid: str, old_cwd: Path, jsonl: Path | None = None):
         paths: list[Path] = []
         art = load_json(self.wb.home / "artifact-index" / f"{sid}.json")
         if art:
@@ -595,6 +595,8 @@ class Mover:
                 fp = f.get("filePath")
                 if fp and f.get("action") in ("create", "modify", "rename"):
                     paths.append(Path(fp))
+        if jsonl:
+            paths.extend(sorted(tool_output_paths(jsonl, old_cwd), key=str))
         seen = set()
         out = []
         for p in paths:
@@ -648,6 +650,7 @@ class Mover:
         item_dir = self.backup.item_dir(sid)
         src_project = None
         dst_project = None
+        pre_outputs = []
         with_assets = bool(getattr(self.opts, "with_assets", False))
         manifest = {
             "version": 1, "session_id": sid, "title": title, "mode": mode,
@@ -688,6 +691,9 @@ class Mover:
                 manifest["session"]["target_dir_backup"] = str(
                     self.backup.copy_tree(dst_dir, item_dir / "session" / f"target-existing-{sid}")
                 )
+            if with_assets and not self.opts.no_artifacts:
+                # 必须在搬走 JSONL 之前解析正文里的写文件调用。
+                pre_outputs = self._collect_outputs(sid, old_cwd, src_jsonl)
             write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
         else:
             write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
@@ -748,7 +754,7 @@ class Mover:
                     write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
 
                 if with_assets and not self.opts.no_artifacts:
-                    for out in self._collect_outputs(sid, old_cwd):
+                    for out in pre_outputs:
                         rec = self._move_output(sid, out, old_cwd, Path(new_cwd))
                         manifest["outputs"].append(rec)
                     write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
@@ -1384,6 +1390,54 @@ TURN_ABORTED_RE = re.compile(r"<turn_aborted\b[\s\S]*?</turn_aborted>", re.I)
 def find_jsonl(home: Path, sid: str):
     found = list((Path(home) / "projects").glob(f"*/{sid}.jsonl"))
     return found[0] if found else None
+
+
+WRITE_TOOL_NAMES = {
+    "Write", "Edit", "MultiEdit", "NotebookEdit",
+    "write_file", "edit_file", "apply_patch", "create_file", "replace_in_file",
+}
+
+
+def tool_output_paths(jsonl: Path, root: Path):
+    """从 WorkBuddy JSONL 的 function_call 里抽写文件类工具的路径。"""
+    out = set()
+    if not jsonl or not jsonl.exists():
+        return out
+    root = Path(root)
+    for line in read_text(jsonl).splitlines():
+        if not line.strip() or '"function_call"' not in line:
+            continue
+        try:
+            item = json.loads(line)
+        except Exception:
+            continue
+        if item.get("type") != "function_call":
+            continue
+        name = item.get("name") or item.get("tool") or ""
+        if name not in WRITE_TOOL_NAMES:
+            continue
+        raw = item.get("arguments")
+        if isinstance(raw, dict):
+            args = raw
+        elif isinstance(raw, str):
+            try:
+                args = json.loads(raw)
+            except Exception:
+                args = {}
+        else:
+            args = {}
+        if not isinstance(args, dict):
+            args = {}
+        for key in ("file_path", "notebook_path", "path"):
+            value = args.get(key)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            p = Path(value.strip().strip('"'))
+            if not p.is_absolute():
+                p = root / p
+            if is_under(p, root):
+                out.add(p)
+    return out
 
 
 def clean_orphan_project_dirs(home: Path, candidates, keep=()):

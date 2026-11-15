@@ -75,6 +75,14 @@ python <skill>/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.jso
 - 70 条有效会话的 `cwd` 与实际 JSONL 目录一致性为 0 异常，缺失 JSONL 为 0。
 - `doctor` 默认检查从 8 项扩展到 10 项，新增「项目目录一致性」和「空项目目录」。
 
+## 正文产出发现实测（1.4.0）
+
+- 用 JSONL `function_call` 的 `Write` / `Edit` 路径补充 `artifact-index` / `changes-index`。
+- 本机 70 条有效会话中，28 条有 cwd 内非记忆写入路径，共 104 个文件候选。
+- 典型漏网产出：HTML 报告、Python 脚本、维权/采购报告等；此前只靠索引会漏掉。
+- `.workbuddy/memory/*.md` 会被正文解析命中，但迁移时由记忆逻辑处理，产出层排除。
+- 解析必须在搬走 JSONL 之前完成，否则结果为空。
+
 ## 实测参考
 
 - 70 条、114 MB JSONL、155 万字正文，8 个子智能体并行，提取约 1 分钟。

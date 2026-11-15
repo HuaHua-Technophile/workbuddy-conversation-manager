@@ -6,7 +6,16 @@ description_en: Manage local WorkBuddy sessions — doctor, list/filter, two-ste
 display_name: WorkBuddy Conversation Manager
 display_name_zh: WorkBuddy会话管理
 display_name_en: WorkBuddy Conversation Manager
-version: 1.3.0
+examples_zh:
+  - "把标题太短的 WorkBuddy 对话批量重命名"
+  - "把 NAS 相关对话归到 NAS 空间，记忆和产出一起带过去"
+  - "新建 D:/VMs 空间并迁入虚拟机会话"
+examples_en:
+  - "Batch rename WorkBuddy conversations whose titles are too short"
+  - "Move NAS-related conversations into the NAS space with memory and outputs"
+  - "Create a D:/VMs space and move VM conversations into it"
+author: HuaHua
+version: 1.4.0
 tags: [WorkBuddy, 会话管理, 重命名, 迁移, SQLite]
 license: MIT
 ---
@@ -36,6 +45,7 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 - 会话表 `sessions`：`cwd` 决定空间归属，`is_playground` 区分 `1=任务` / `0=空间`。
 - 对话正文：`~/.workbuddy/projects/<encoded-cwd>/<session-id>.jsonl`；子代理、工具结果在同名目录。
 - 标题三层：JSONL 最后一条 `custom-title` 事件是有效标题；数据库 `title` / `custom_title` 和侧栏快照 `title` 是展示与缓存层，三层要一起写。
+- 产出识别三路：`artifact-index`、`changes-index` 详情、JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`；正文解析必须在搬走 JSONL 之前完成。
 - 侧栏快照：`~/.workbuddy/<user-id>/sidebar-list-snapshot.json`；应用启动会按数据库重建。
 - 本机可能有多个 `user_id`；`list` / `rename --export` / `rename --import` 用 `--all-users` 覆盖全部账号。
 - 迁移默认同时搬会话 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致对话读不到；只要元数据时加 `--metadata-only`。
@@ -45,12 +55,20 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 
 ## 安装与验证
 
-把整个目录放进宿主的用户级技能目录，例如：
+仓库按 `skills/workbuddy-conversation-manager/` 组织，根目录有 `install.py`；宿主需要扁平技能目录：
+
+```bash
+python install.py --targets all
+# 或只装一个宿主
+python install.py --to ~/.qoder/skills
+```
+
+安装后的扁平目录：
 
 ```
 ~/.qoder/skills/workbuddy-conversation-manager/
 ~/.workbuddy/skills/workbuddy-conversation-manager/
-~/.codex/skills/workbuddy-conversation-manager/
+~/.agents/skills/workbuddy-conversation-manager/
 ```
 
 验证：
@@ -152,6 +170,8 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X
 3. 该会话写入的源工作空间记忆段落、产出文件及其旧路径链接；
 4. 侧栏快照 `space.name`。
 
+产出识别三路合并：`artifact-index`、`changes-index` 详情、JSONL `function_call` 的 `Write` / `Edit` 路径；正文解析在搬走 JSONL 之前完成，避免搬完再解析导致空结果。
+
 默认迁移记忆与产出；只要元数据时加 `--metadata-only`。任务模式只改 `is_playground=1`，不动 cwd 与文件。
 
 搬空的源项目目录默认自动删除，`--keep-orphans` 保留，删除清单写入 `batch.json` 的 `removed_dirs`。
@@ -242,6 +262,8 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D
 | `--require-closed` 返回 3 | WorkBuddy 正在运行 | 退出应用后重跑，或去掉该参数 |
 | 迁移后对话打不开 | 只改了数据库 cwd，JSONL 没跟着移动 | 用本技能 `move`，它会同改 DB 与 JSONL；不要手工只改库 |
 | 迁移后记忆/产出没跟过去 | 使用了 `--metadata-only` | 去掉该参数重跑，或手工迁移 |
+| 产出只搬到了旧索引里的少数文件 | 只依赖 `artifact-index`/`changes-index` | 1.4.0 起会补 JSONL `Write`/`Edit` 路径；确认 JSONL 仍在源目录后再搬 |
+| 仓库根没有 SKILL.md | 仓库是 `skills/<name>/` 结构，宿主要扁平目录 | 运行 `python install.py --targets all` |
 | doctor 提示标题不一致 | 应用缓存未重建 | 重启应用；仍不一致则重跑导入 |
 | 找不到目标空间 | 目标没有 `is_playground=0` 的会话 | 加 `--create-space`，或先在 WorkBuddy 里打开该空间 |
 | 想新建空空间 | WorkBuddy 空间由会话 cwd 派生 | 先迁入一条种子会话；不存在空空间 |

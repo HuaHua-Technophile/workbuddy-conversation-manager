@@ -1,5 +1,7 @@
 # WorkBuddy Conversation Manager
 
+![WorkBuddy Conversation Manager](skills/workbuddy-conversation-manager/assets/icon-512.png)
+
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)]()
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -32,21 +34,21 @@ WorkBuddy 侧栏标题通常只反映首条消息，长对话真正的落点在�
 
 ```bash
 # 1. 体检
-python scripts/workbuddy_sessions.py doctor
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py doctor
 
 # 2. 看会话
-python scripts/workbuddy_sessions.py list --all-users --limit 20
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py list --all-users --limit 20
 
 # 3. 导出完整历史并分片
-python scripts/workbuddy_sessions.py rename --export --all-users --shards 8 --out ./wb-exp
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py rename --export --all-users --shards 8 --out ./wb-exp
 
 # 4. agent 读 ./wb-exp/*.txt 与 shards/groupN.json，产出 titles.json
 
 # 5. 干跑
-python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json
 
 # 6. 确认后落盘
-python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply \
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply \
   --backup-dir ./workbuddy-rename-backup
 ```
 
@@ -67,15 +69,15 @@ python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --appl
 
 ```bash
 # 默认：改归属 + 搬会话 JSONL/子目录 + 搬该会话的记忆段落与产出
-python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
 
 # 只要元数据，不搬记忆与产出
-python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
 
 # 目标空间不存在时，用首个迁入会话创建空间（目录需已存在）
-python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
 # 确认要新建目录时
-python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
+python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
 ```
 
 WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，并迁移该会话的记忆和产出。搬空的源项目目录默认自动删除，`--keep-orphans` 可保留。
@@ -91,44 +93,54 @@ WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读
 - **自动清理空源目录**：搬完后无会话的源项目目录自动删除，清单写入 `removed_dirs`。
 - **不覆盖**：目标已有同名文件先备份；备份目录自动去重。
 
-## 安装
+## 安装与仓库结构
 
-一键安装（skills.sh）：
-
-```bash
-npx skills add HuaHua-Technophile/workbuddy-conversation-manager
-# 本机 npm 缓存异常时可用 pnpm
-pnpm dlx skills add HuaHua-Technophile/workbuddy-conversation-manager -g -y
+```
+workbuddy-conversation-manager/
+├── install.py
+├── README.md
+├── LICENSE
+├── dist/                              # 构建产物（git 忽略）
+└── skills/
+    └── workbuddy-conversation-manager/
+        ├── SKILL.md
+        ├── CHANGELOG.md
+        ├── PUBLISHING.md
+        ├── assets/                    # 头像与市场素材
+        ├── scripts/
+        ├── references/
+        └── examples/
 ```
 
-或把整个目录放进宿主的用户级技能目录：
+仓库采用 `skills/<name>/` 布局便于目录站索引；宿主要求扁平技能目录，用根目录 `install.py` 安装：
 
 ```bash
-cp -r workbuddy-conversation-manager "$HOME/.qoder/skills/"
-cp -r workbuddy-conversation-manager "$HOME/.workbuddy/skills/"
-# Codex 存在时
-[ -d "$HOME/.codex" ] && cp -r workbuddy-conversation-manager "$HOME/.codex/skills/"
+python install.py --targets all
+# 或只装一个宿主
+python install.py --to ~/.qoder/skills
 ```
 
-验证：
+安装后可直接验证：
 
 ```bash
 python "$HOME/.qoder/skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py" doctor
 ```
 
-详见 [`references/install.md`](references/install.md)。
+`skills.sh` 收录状态待复核，`skills list -g` 显示 tracked 不等于已出现在目录页。
+
+详见 [`skills/workbuddy-conversation-manager/references/install.md`](skills/workbuddy-conversation-manager/references/install.md)。
 
 ## 文档
 
 | 文件 | 内容 |
 |---|---|
-| [`SKILL.md`](SKILL.md) | 技能主文档：命令、工作流、安全规则 |
-| [`references/workbuddy-storage.md`](references/workbuddy-storage.md) | 表结构、路径编码、标题存储、验证 SQL、已知坑 |
-| [`references/rename-classify.md`](references/rename-classify.md) | 两步式重命名、LPT 分片、子智能体模板 |
-| [`references/cases.md`](references/cases.md) | 70 条对话重命名实测与踩坑 |
-| [`references/install.md`](references/install.md) | 三端安装与验证 |
-| [`CHANGELOG.md`](CHANGELOG.md) | 版本记录 |
-| [`PUBLISHING.md`](PUBLISHING.md) | 各平台发布状态与提交材料 |
+| [`skills/workbuddy-conversation-manager/SKILL.md`](skills/workbuddy-conversation-manager/SKILL.md) | 技能主文档：命令、工作流、安全规则 |
+| [`references/workbuddy-storage.md`](skills/workbuddy-conversation-manager/references/workbuddy-storage.md) | 表结构、路径编码、标题存储、验证 SQL、已知坑 |
+| [`references/rename-classify.md`](skills/workbuddy-conversation-manager/references/rename-classify.md) | 两步式重命名、LPT 分片、子智能体模板 |
+| [`references/cases.md`](skills/workbuddy-conversation-manager/references/cases.md) | 70 条对话重命名实测与踩坑 |
+| [`references/install.md`](skills/workbuddy-conversation-manager/references/install.md) | 三端安装与验证 |
+| [`CHANGELOG.md`](skills/workbuddy-conversation-manager/CHANGELOG.md) | 版本记录 |
+| [`PUBLISHING.md`](skills/workbuddy-conversation-manager/PUBLISHING.md) | 各平台发布状态与提交材料 |
 
 ## 已知限制
 

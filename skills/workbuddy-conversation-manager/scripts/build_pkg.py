@@ -5,25 +5,28 @@
 - -root：zip 根目录直接是 SKILL.md（部分市场要求此形态）
 - -dir：单层目录 workbuddy-conversation-manager/，内含 SKILL.md（另一些市场要求此形态）
 
-用法：python scripts/build_pkg.py [--out dist]
+用法：python skills/workbuddy-conversation-manager/scripts/build_pkg.py [--out dist]
 """
 import argparse
 import os
 import zipfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # skills/<name>/
+REPO = os.path.dirname(os.path.dirname(ROOT))                        # 仓库根
 NAME = "workbuddy-conversation-manager"
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 FILES = ["SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "PUBLISHING.md"]
 DIRS = ["scripts", "references", "examples"]
-SKIP_DIRS = {"__pycache__", ".git", "dist", "workbuddy-backups", "wb-exp", "_skill_test"}
+SKIP_DIRS = {"__pycache__", ".git", "dist"}
 
 
 def collect():
     items = []
     for f in FILES:
         p = os.path.join(ROOT, f)
+        if not os.path.isfile(p):
+            p = os.path.join(REPO, f)
         if os.path.isfile(p):
             items.append((p, f))
     for d in DIRS:
@@ -50,7 +53,7 @@ def build(out_dir, prefix):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
+    ap.add_argument("--out", default=os.path.join(REPO, "dist"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     build(args.out, "")
