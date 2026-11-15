@@ -90,6 +90,6 @@ for t in tags:
     d.text((tx + pad, ty + (th - 26) / 2 - 1), t, font=f_tag, fill=(206, 240, 227))
     tx += bw + gapx
 
-out = ROOT / "banner-1280.png"
+out = ROOT / "banner-1280-pil.png"
 bg.convert("RGB").save(out, "PNG", optimize=True)
 print("saved", out, out.stat().st_size, "bytes", bg.size)

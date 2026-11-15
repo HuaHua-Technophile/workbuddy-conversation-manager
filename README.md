@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="skills/workbuddy-task-manager/assets/banner-1280.png"
+  <img src="skills/workbuddy-task-manager/assets/banner-1280-pil.png"
        width="100%" alt="WorkBuddy Task Manager — local task and group management for AI agents">
 </p>
 
