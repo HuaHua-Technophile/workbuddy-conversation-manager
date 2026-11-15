@@ -192,7 +192,7 @@ python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbudd
 
 发布后在 <https://skillhub.cn/dashboard> 查看「安全审核中」；审核通过后详情页才完整可见。
 
-本机实测（2026-11-15）：v1.4.1 → `skillId=322039`；v1.4.2 继续复用同一 skillId。发布后约 1 分钟查询，`skill.iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`；审核前 `latestVersion` 仍返回旧版本，`tags.latest` 已是新版本。
+本机实测（2026-11-15）：v1.4.1 → `skillId=322039`；v1.4.2 继续复用同一 skillId，`tags.latest=1.4.2`，审核中。发布后约 1 分钟查询，`skill.iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`；审核前 `latestVersion` 仍返回已过审的 1.4.1，展示名与概述会在 1.4.2 过审后切换为“任务 / 分组”。
 
 ### CI 的两个坑
 

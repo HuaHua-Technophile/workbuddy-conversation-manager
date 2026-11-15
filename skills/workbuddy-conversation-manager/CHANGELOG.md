@@ -7,6 +7,7 @@
 - 命令、参数与数据库字段保持不变：`sessions`、`session_id`、`--session`、`spaces`、`--create-space`、`space.name`。
 - 展示名统一为 `WorkBuddy任务管理` / `WorkBuddy Task Manager`；`slug` 与 `name` 仍为 `workbuddy-conversation-manager`。
 - 版本对齐到 1.4.2：GitHub Release、SkillHub 与 WorkBuddy `-dir` 包使用同一版本号。
+- SkillHub 1.4.2 已提交（`skillId=322039`，审核中）；过审后展示名与概述切换为“任务 / 分组”。
 
 ## 1.4.1 — 2026-11-15
 
