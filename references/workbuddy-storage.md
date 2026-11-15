@@ -127,7 +127,7 @@ WorkBuddy 没有独立的 workspace 表；空间由 `is_playground=0` 的会话 
 python <skill-dir>/scripts/workbuddy_sessions.py move --session <sid> --to "D:/VMs" --create-space
 ```
 
-目录不存在时脚本会创建；首个迁入的会话成为空间种子。不存在“空空间”这种形态。
+目录默认必须已存在；确认要新建目录时加 `--allow-missing`。首个迁入的会话成为空间种子，不存在“空空间”这种形态。
 
 ## 迁移：默认搬全套
 
@@ -142,6 +142,8 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session <sid> --to "D:/V
 为什么必须移动 JSONL：应用按 `cwd` 推导正文路径（`projects/<encoded-cwd>/<sid>.jsonl`）；只改数据库会导致对话读不到。
 
 只要元数据时加 `--metadata-only`：仍会改 DB、移动 JSONL/子目录、更新快照，但不碰记忆与产出。`--no-artifacts` 可在搬记忆时跳过产出。
+
+搬完后源项目目录若已无任何 `*.jsonl`，默认自动删除；`--keep-orphans` 保留。删除清单写入 `batch.json` 的 `removed_dirs`。
 
 `MEMORY.md` 长期约定不改；需要时人工提炼。
 
@@ -196,16 +198,18 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session <sid> --to "D:/V
 
 ## 体检
 
-`doctor` 只读，检查 8 项：
+`doctor` 只读，检查 10 项：
 
 1. 数据库存在、可打开、`PRAGMA integrity_check=ok`；
 2. WAL/SHM 状态，WAL 超过 50MB 告警；
 3. `sessions` 表必需列齐全；
 4. WorkBuddy 进程是否运行（运行中允许热写）；
 5. 有效会话数与缺失 JSONL 数；
-6. 侧栏快照文件数、条目数、缺快照/重复/缺账号；
-7. 数据库 `title` 与快照 `title` 是否一致；
-8. 备份目录数量与最新一份。
+6. JSONL 实际目录是否等于 `encode_cwd(cwd)`；
+7. `projects/` 下是否还有无会话的空目录；
+8. 侧栏快照文件数、条目数、缺快照/重复/缺账号；
+9. 数据库 `title` 与快照 `title` 是否一致；
+10. 备份目录数量与最新一份。
 
 `doctor --deep` 额外逐条扫描 JSONL 最后一条 `custom-title` 与数据库 `title` 是否一致。退出码 `0` 全绿，`1` 有告警。
 

@@ -18,7 +18,7 @@ WorkBuddy 侧栏标题通常只反映首条消息，长对话真正的落点在�
 
 | 命令 | 用途 | 写库 |
 |---|---|---|
-| `doctor` | 8 项体检：数据库、WAL、表结构、进程、会话文件、快照、标题一致性、备份 | 否 |
+| `doctor` | 10 项体检：数据库、WAL、表结构、进程、会话文件、目录一致性、空目录、快照、标题一致性、备份 | 否 |
 | `list` | 关键词/cwd/时间/区域/账号筛选 | 否 |
 | `rename --export` | 导出完整历史，按字数 LPT 自动分片 | 否 |
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
@@ -72,11 +72,13 @@ python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇�
 # 只要元数据，不搬记忆与产出
 python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
 
-# 目标空间不存在时，用首个迁入会话创建空间
+# 目标空间不存在时，用首个迁入会话创建空间（目录需已存在）
 python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
+# 确认要新建目录时
+python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
 ```
 
-WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，并迁移该会话的记忆和产出。
+WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，并迁移该会话的记忆和产出。搬空的源项目目录默认自动删除，`--keep-orphans` 可保留。
 
 ## 安全设计
 
@@ -86,6 +88,7 @@ WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读
 - **热写可选**：允许 WorkBuddy 运行中写入；要硬性拦截加 `--require-closed`（退出码 3）。
 - **副本演练**：`--workbuddy-home` 可指向数据库副本，与真库互不影响。
 - **默认搬全套**：归属、会话文件、记忆、产出一起迁移；只要元数据时用 `--metadata-only`。
+- **自动清理空源目录**：搬完后无会话的源项目目录自动删除，清单写入 `removed_dirs`。
 - **不覆盖**：目标已有同名文件先备份；备份目录自动去重。
 
 ## 安装

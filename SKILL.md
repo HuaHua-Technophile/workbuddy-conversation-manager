@@ -6,7 +6,7 @@ description_en: Manage local WorkBuddy sessions — doctor, list/filter, two-ste
 display_name: WorkBuddy Conversation Manager
 display_name_zh: WorkBuddy会话管理
 display_name_en: WorkBuddy Conversation Manager
-version: 1.2.0
+version: 1.3.0
 tags: [WorkBuddy, 会话管理, 重命名, 迁移, SQLite]
 license: MIT
 ---
@@ -19,7 +19,7 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 
 | 命令 | 用途 | 写库 |
 |---|---|---|
-| `doctor` | 8 项体检：库、WAL、表结构、进程、会话文件、快照、标题一致性、备份 | 否 |
+| `doctor` | 10 项体检：库、WAL、表结构、进程、会话文件、目录一致性、空目录、快照、标题一致性、备份 | 否 |
 | `list` | 列出会话，支持关键词/cwd/时间/区域/账号筛选 | 否 |
 | `rename --export` | 导出完整对话历史，按字数 LPT 自动分片 | 否 |
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
@@ -39,6 +39,7 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 - 侧栏快照：`~/.workbuddy/<user-id>/sidebar-list-snapshot.json`；应用启动会按数据库重建。
 - 本机可能有多个 `user_id`；`list` / `rename --export` / `rename --import` 用 `--all-users` 覆盖全部账号。
 - 迁移默认同时搬会话 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致对话读不到；只要元数据时加 `--metadata-only`。
+- 搬完后源项目目录若已无任何 `*.jsonl`，默认自动删除；`--keep-orphans` 保留。删除清单写入 `batch.json` 的 `removed_dirs`。
 - 空间由 `is_playground=0` 的会话 `cwd` 派生；目标空间不存在时用 `move --create-space --to <绝对路径>` 创建，首个迁入会话作为种子。
 - 备份目录自动去重，同名或同一秒追加时间戳；文本文件用临时文件 + `os.replace` 原子写入。
 
@@ -59,7 +60,7 @@ python <skill-dir>/scripts/workbuddy_sessions.py doctor
 python <skill-dir>/scripts/workbuddy_sessions.py doctor --deep
 ```
 
-8 项全 `OK` 说明可用。`WorkBuddy 进程` 只是提示项，运行中也允许热写。
+10 项全 `OK` 说明可用；`--deep` 额外核对 JSONL 最后一条 custom-title。`WorkBuddy 进程` 只是提示项，运行中也允许热写。
 
 ## 命令总览
 
@@ -153,6 +154,10 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X
 
 默认迁移记忆与产出；只要元数据时加 `--metadata-only`。任务模式只改 `is_playground=1`，不动 cwd 与文件。
 
+搬空的源项目目录默认自动删除，`--keep-orphans` 保留，删除清单写入 `batch.json` 的 `removed_dirs`。
+
+目标空间不存在时加 `--create-space`；目标目录必须已存在，确认要新建目录时再加 `--allow-missing`。
+
 每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、会话文件、记忆、产出和快照。
 
 ### backup / rollback
@@ -203,6 +208,8 @@ move --session <sid> --to "D:/B/NAS"
 
 # 目标空间不存在时，用首个迁入会话创建空间
 python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
+# 目录不存在且确认创建时
+python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
 ```
 
 ## 安全规则
@@ -238,6 +245,8 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D
 | doctor 提示标题不一致 | 应用缓存未重建 | 重启应用；仍不一致则重跑导入 |
 | 找不到目标空间 | 目标没有 `is_playground=0` 的会话 | 加 `--create-space`，或先在 WorkBuddy 里打开该空间 |
 | 想新建空空间 | WorkBuddy 空间由会话 cwd 派生 | 先迁入一条种子会话；不存在空空间 |
+| `--create-space` 报目录不存在 | 默认要求目标目录已存在 | 确认路径后加 `--allow-missing` |
+| 迁移后旧项目目录还在 | 加了 `--keep-orphans`，或目录里还有其他会话 | 去掉该参数重跑；有会话的目录不会删 |
 | 备份目录带时间戳后缀 | 同名或同一秒已存在 | 正常保护行为，用最新目录 |
 | 子智能体漏条 | 清单没对齐 | 用 `manifest.json` 的 sid 做差集核对 |
 | `python -c` 反引号被执行 | Bash 命令替换 | 长脚本写成 `.py` 文件再运行 |

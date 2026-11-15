@@ -68,6 +68,13 @@ python <skill>/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.jso
 
 实际排障顺序：先 `doctor` 看会话文件是否齐全，再 `spaces` 确认目标空间存在，最后 `move` 逐条写入并按 manifest 校验。应用运行中允许热写，写完重启验证侧栏分组。
 
+## 目录一致性 / 空目录清理实测
+
+- 本机 `projects/` 曾有 93 个项目目录，其中 3 个已无任何 `*.jsonl`。
+- 新增自动清理后，3 个空目录被删除，`projects/` 收敛到 90 个。
+- 70 条有效会话的 `cwd` 与实际 JSONL 目录一致性为 0 异常，缺失 JSONL 为 0。
+- `doctor` 默认检查从 8 项扩展到 10 项，新增「项目目录一致性」和「空项目目录」。
+
 ## 实测参考
 
 - 70 条、114 MB JSONL、155 万字正文，8 个子智能体并行，提取约 1 分钟。

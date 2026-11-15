@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 
@@ -357,6 +357,7 @@ class Backup:
         self.base = unique_dir((Path(base) if base else wb.home / "backup" / f"workbuddy-move-{now_stamp()}").expanduser().resolve())
         self.base.mkdir(parents=True, exist_ok=True)
         self.items = []
+        self.removed_dirs = []
 
     def item_dir(self, sid: str) -> Path:
         d = self.base / sid
@@ -380,6 +381,7 @@ class Backup:
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "workbuddy_home": str(self.wb.home),
             "items": self.items,
+            "removed_dirs": self.removed_dirs,
         }
         path = self.base / "batch.json"
         write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
@@ -644,6 +646,8 @@ class Mover:
             target_cwd = old_cwd_raw
 
         item_dir = self.backup.item_dir(sid)
+        src_project = None
+        dst_project = None
         with_assets = bool(getattr(self.opts, "with_assets", False))
         manifest = {
             "version": 1, "session_id": sid, "title": title, "mode": mode,
@@ -771,6 +775,8 @@ class Mover:
                 "old_cwd": old_cwd_raw, "target_cwd": new_cwd,
                 "manifest": str(manifest_path), "backup": str(item_dir),
                 "metadata_only": manifest.get("metadata_only", True),
+                "src_project": str(src_project) if src_project else None,
+                "dst_project": str(dst_project) if dst_project else None,
                 "memory": len(manifest["memory"]), "outputs": len(manifest["outputs"]),
                 "checks": checks,
             }
@@ -992,7 +998,7 @@ def normalize_space_path(value: str) -> str:
     return s
 
 
-def resolve_target_space(wb: WorkBuddy, value: str, create: bool):
+def resolve_target_space(wb: WorkBuddy, value: str, create: bool, allow_missing: bool = False):
     try:
         return wb.resolve_space(value)
     except UserError as exc:
@@ -1000,10 +1006,15 @@ def resolve_target_space(wb: WorkBuddy, value: str, create: bool):
             raise
         path = normalize_space_path(value)
         target = Path(path)
-        if target.exists() and not target.is_dir():
-            raise UserError(f"目标路径不是目录：{path}")
+        if target.exists():
+            if not target.is_dir():
+                raise UserError(f"目标路径不是目录：{path}")
+            print(f"[INFO] 使用已有目录创建空间：{path}（首个迁入会话作为种子）")
+            return path
+        if not allow_missing:
+            raise UserError(f"目录不存在：{path}。确认在该路径创建空间请加 --allow-missing。")
         target.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] 新建空间：{path}（首个迁入会话作为种子）")
+        print(f"[INFO] 新建目录并创建空间：{path}（首个迁入会话作为种子）")
         return path
 
 
@@ -1017,13 +1028,14 @@ def cmd_move(args):
             print("提示：检测到 WorkBuddy 正在运行。按配置允许热写；若侧栏未刷新，请切换空间或重启应用。")
         sessions = select_sessions(wb, args.session)
         create = bool(getattr(args, "create_space", False))
+        allow_missing = bool(getattr(args, "allow_missing", False))
         if args.mode == "space":
             if not args.to:
                 raise UserError("迁移到空间时必须提供 --to。")
             if len(args.to) == 1:
-                targets = [resolve_target_space(wb, args.to[0], create)] * len(sessions)
+                targets = [resolve_target_space(wb, args.to[0], create, allow_missing)] * len(sessions)
             elif len(args.to) == len(sessions):
-                targets = [resolve_target_space(wb, t, create) for t in args.to]
+                targets = [resolve_target_space(wb, t, create, allow_missing) for t in args.to]
             else:
                 raise UserError("--to 的数量必须是 1，或与会话数量一致。")
         else:
@@ -1051,11 +1063,21 @@ def cmd_move(args):
             except Exception as exc:
                 print(f"[FAIL] {session.get('title') or session['id']}：{exc}", file=sys.stderr)
                 results.append({"session_id": session["id"], "status": "failed", "error": str(exc)})
+        removed_dirs = []
+        if not getattr(args, "keep_orphans", False):
+            src_dirs = [r.get("src_project") for r in results if r.get("src_project")]
+            dst_dirs = [r.get("dst_project") for r in results if r.get("dst_project")]
+            removed_dirs = clean_orphan_project_dirs(wb.home, src_dirs, keep=dst_dirs)
+            backup.removed_dirs = removed_dirs
         batch = backup.batch_manifest()
         ok = sum(1 for r in results if r.get("status") == "ok")
         skip = sum(1 for r in results if r.get("status") == "skipped")
         fail = sum(1 for r in results if r.get("status") == "failed")
         print(f"\n完成：成功 {ok}，跳过 {skip}，失败 {fail}")
+        if removed_dirs:
+            print(f"已清理 {len(removed_dirs)} 个空源项目目录：")
+            for d in removed_dirs:
+                print(f"  - {d}")
         print(f"批次清单：{batch}")
         if args.json:
             print(json.dumps({"results": results, "batch_manifest": str(batch)}, ensure_ascii=False, indent=2))
@@ -1197,6 +1219,32 @@ def cmd_doctor(args):
             "warn" if missing_jsonl else "ok",
             f"{len(sessions)} 条会话，{len(missing_jsonl)} 条缺 JSONL",
         )
+        dir_mismatch = []
+        for s in sessions:
+            p = find_jsonl(home, s["id"])
+            if not p:
+                continue
+            expected = home / "projects" / WorkBuddy.encode_cwd(s["cwd"])
+            if path_key(p.parent) != path_key(expected):
+                dir_mismatch.append(s["id"])
+        add(
+            "项目目录一致性",
+            "warn" if dir_mismatch else "ok",
+            f"{len(dir_mismatch)} 条 JSONL 目录与 cwd 不一致"
+            + (f"；示例 {dir_mismatch[0][:8]}" if dir_mismatch else ""),
+        )
+        orphan_dirs = []
+        projects_root = home / "projects"
+        if projects_root.exists():
+            for d in projects_root.iterdir():
+                if d.is_dir() and not d.is_symlink() and not any(d.glob("*.jsonl")):
+                    orphan_dirs.append(d)
+        add(
+            "空项目目录",
+            "warn" if orphan_dirs else "ok",
+            f"{len(orphan_dirs)} 个无会话目录"
+            + (f"：{', '.join(d.name for d in orphan_dirs[:3])}" if orphan_dirs else ""),
+        )
         snaps = wb.snapshots()
         snap_items = {}
         dup = 0
@@ -1336,6 +1384,37 @@ TURN_ABORTED_RE = re.compile(r"<turn_aborted\b[\s\S]*?</turn_aborted>", re.I)
 def find_jsonl(home: Path, sid: str):
     found = list((Path(home) / "projects").glob(f"*/{sid}.jsonl"))
     return found[0] if found else None
+
+
+def clean_orphan_project_dirs(home: Path, candidates, keep=()):
+    """删除已无任何 *.jsonl 的源项目目录；keep 中的目标目录永不删。"""
+    projects_root = (Path(home) / "projects").resolve()
+    keep_keys = {path_key(p) for p in keep if p}
+    removed = []
+    seen = set()
+    for cand in candidates:
+        if not cand:
+            continue
+        try:
+            d = Path(cand).resolve()
+        except Exception:
+            continue
+        key = path_key(d)
+        if key in seen or key in keep_keys:
+            continue
+        seen.add(key)
+        if not d.is_dir() or d.is_symlink():
+            continue
+        if path_key(d.parent) != path_key(projects_root):
+            continue
+        if any(d.glob("*.jsonl")):
+            continue
+        try:
+            shutil.rmtree(d)
+            removed.append(str(d))
+        except Exception:
+            pass
+    return removed
 
 
 def extract_content_text(item: dict) -> str:
@@ -1921,6 +2000,10 @@ def build_parser():
     mv.add_argument("--backup-dir", default=None)
     mv.add_argument("--create-space", action="store_true",
                     help="目标空间不存在时按绝对路径创建，首个迁入会话作为种子")
+    mv.add_argument("--allow-missing", action="store_true",
+                    help="配合 --create-space，目录不存在时允许创建")
+    mv.add_argument("--keep-orphans", action="store_true",
+                    help="保留搬空的源项目目录（默认自动删除）")
     asset_group = mv.add_mutually_exclusive_group()
     asset_group.add_argument("--with-assets", dest="with_assets", action="store_true",
                              help="迁移记忆与产出（默认）")
