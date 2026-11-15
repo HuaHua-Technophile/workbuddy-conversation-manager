@@ -6,8 +6,8 @@
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| GitHub | ✅ v1.4.0 已发布；v1.4.1 准备发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。 |
-| SkillHub（腾讯） | 🕒 v1.4.0 审核中；v1.4.1 待发布 | 本机 CLI 已登录；slug `workbuddy-conversation-manager`。v1.4.1 使用仓库 jsdelivr 图标，分类 `dev-programming`。 |
+| GitHub | ✅ v1.4.0 已发布；main 含 v1.4.1 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.4.1 未打 tag，避免与已手动发布的 SkillHub 1.4.1 重复。 |
+| SkillHub（腾讯） | 🕒 v1.4.1 审核中；v1.4.0 在线 | CLI 手动发布成功，skillId `322039`；slug `workbuddy-conversation-manager`。`iconUrl` 已异步更新为仓库 jsdelivr，`category=dev-programming`。 |
 | WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.4.1 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录 | 无手动提交入口，按 `npx skills add` 安装量索引；已改为 `skills/<name>/` 布局，等平台扫描。 |
 | Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布。 |
@@ -191,6 +191,8 @@ python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbudd
 - 连续发布会触发 `429 请求过于频繁`，等约 50 秒再试。
 
 发布后在 <https://skillhub.cn/dashboard> 查看「安全审核中」；审核通过后详情页才完整可见。
+
+本机实测（2026-11-15）：v1.4.1 → `skillId=322039`；发布后约 1 分钟查询，`skill.iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`；审核前 `latestVersion` 仍返回 1.4.0，`tags.latest` 已是 1.4.1。
 
 ### CI 的两个坑
 

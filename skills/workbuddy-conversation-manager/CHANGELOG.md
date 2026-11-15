@@ -7,6 +7,7 @@
 - `iconUrl` 改指向仓库自身（jsdelivr），图标随后续提交更新，不再依赖平台托管地址。
 - 新增 `.github/workflows/release.yml`：推送 `v*` tag 时校验三处版本号、构建两个 zip、发布 GitHub Release；同一 workflow 的 `skillhub` job 在配置 `SKILLHUB_KEY` 后自动发布，并在发布前剔除 `assets/`。
 - `PUBLISHING.md` 补充 SkillHub CLI 发布、图标异步生效、`category` 字段、WorkBuddy 手动更新和 CI 两个坑。
+- 已通过本机 SkillHub CLI 发布 1.4.1（`skillId=322039`，审核中）；`iconUrl` 与 `category=dev-programming` 已生效。
 
 ## 1.4.0 — 2026-11-15
 
