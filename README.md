@@ -1,19 +1,25 @@
 <p align="center">
-  <img src="skills/workbuddy-conversation-manager/assets/icon-512.png"
-       width="128" height="128" alt="WorkBuddy Task Manager">
+  <img src="skills/workbuddy-conversation-manager/assets/banner-1280.png"
+       width="100%" alt="WorkBuddy Task Manager — local task and group management for AI agents">
 </p>
 
-<h1 align="center">WorkBuddy Task Manager</h1>
-
 <p align="center">给 AI Agent 用的 WorkBuddy 本地任务管理技能</p>
-
-<p align="center"><sub>repo / slug: <code>workbuddy-conversation-manager</code></sub></p>
 
 <p align="center">
   <a href="https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases"><img src="https://img.shields.io/github/v/release/HuaHua-Technophile/workbuddy-conversation-manager?label=release&color=2ea44f" alt="Release"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+</p>
+
+<p align="center"><sub>repo / slug: <code>workbuddy-conversation-manager</code></sub></p>
+
+<p align="center">
+  <a href="#安装">安装</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#命令总览">命令</a> ·
+  <a href="#安全设计">安全</a> ·
+  <a href="#文档">文档</a>
 </p>
 
 一个给 AI Agent 用的技能：管理本机 **WorkBuddy** 的任务与分组——10 项体检、筛选、按完整任务历史两步式重命名、跨分组迁移（连同记忆和产出）、整库备份与回滚。
@@ -26,12 +32,26 @@
 
 WorkBuddy 侧栏标题通常只取任务开头，长任务真正的落点往往在中后段：
 
-- `在本机把工具包里的旧镜像换成新镜像`，通读后才发现真正要处理的是驱动兼容和启动项；
-- `请根据今天的记录整理一下`，实际结论是三个分组该合并、两条任务该改名。
+| 处理前 | 处理后 |
+|---|---|
+| `在本机把工具包里的旧镜像换成新镜像` | `[系统] 更新 Win11 精简镜像并校验启动项` |
+| `请根据今天的记录整理一下` | `[系统] 归档 11 月巡检记录并整理三份报告` |
 
 rename 只改标题还不够。把一条任务从 A 分组移到 B 分组时，WorkBuddy 的正文路径由 `cwd` 推导，数据库、JSONL、同名子目录、侧栏快照、记忆段落和产出文件都要一起处理，否则应用重启后可能读不到、记忆丢失或链接失效。
 
 这个技能把「读完整历史 → 生成准确标题 → 安全写回」和「改归属 + 搬全套文件」变成可重复、可回滚的流程，并默认先干跑、按对象备份。
+
+## 工作流
+
+```mermaid
+flowchart LR
+    A["WorkBuddy 本地数据"] --> B["doctor 体检"]
+    B --> C["rename --export"]
+    C --> D["Agent 生成 titles.json"]
+    D --> E["rename --import --apply"]
+    A --> F["move"]
+    F --> G["任务文件 + 记忆 + 产出"]
+```
 
 ## 亮点
 
@@ -166,10 +186,14 @@ python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --cre
 
 ## 发布
 
-- **GitHub Release**：latest 见 [Releases](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases)。
-- **SkillHub**：[workbuddy-conversation-manager](https://skillhub.cn/skills/user_3c4d2464/workbuddy-conversation-manager)（1.4.2 审核中）。
-- **WorkBuddy 开放平台**：手动提交 `-dir` 包；该平台暂无 API / CLI / CI。
-- 仓库已接入 `.github/workflows/release.yml`：push `v*` tag 自动构建并发布 GitHub Release，配置 `SKILLHUB_KEY` 后可同步发布 SkillHub。
+| 渠道 | 状态 | 入口 |
+|---|---|---|
+| GitHub | v1.4.2 已发布 | [Releases](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases) |
+| SkillHub | 1.4.2 审核中 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-conversation-manager) |
+| WorkBuddy 开放平台 | 待上传 1.4.2 `-dir` 包 | [控制台](https://open.workbuddy.cn) |
+| skills.sh | 未收录 | 无手动入口 |
+
+仓库已接入 [`.github/workflows/release.yml`](.github/workflows/release.yml)：push `v*` tag 自动校验版本、构建 zip 并发布 GitHub Release；配置 `SKILLHUB_KEY` 后可同步发布 SkillHub。WorkBuddy 开放平台暂无 API / CLI / CI，只能手动提交。
 
 ## License
 
