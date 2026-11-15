@@ -4,7 +4,7 @@
 
 - 产出识别新增 JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`，与 `artifact-index`、`changes-index` 三路合并；本机实测在 28 条会话中发现 104 个 cwd 内非记忆路径。
 - 正文解析固定在搬走 JSONL 之前，避免搬完再解析导致空结果。
-- frontmatter 增加 `examples_zh` / `examples_en` / `author`；新增 512/1024 头像资产。
+- frontmatter 增加 `examples_zh` / `examples_en` / `author`；头像改为官方 WorkBuddy 图标 + 会话徽标组合，提供 256/512/1024 多尺寸。
 - 仓库重构为 `skills/<name>/` + 根 `install.py`，便于 skills.sh 等目录索引；宿主仍安装为扁平技能目录。
 - `PUBLISHING.md` 更正 skills.sh 状态为未收录/待复核，补充 WorkBuddy/Qoder 市场提交材料。
 

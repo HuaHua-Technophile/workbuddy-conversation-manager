@@ -8,7 +8,8 @@
 |---|---|---|
 | GitHub | ✅ 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager) · [v1.4.0 Release](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases/tag/v1.4.0)，MIT，含 `-root` / `-dir` 两个安装包 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录/待复核 | 2026-11-15 复核页面为 404。该站没有手动提交入口，按 `npx skills add` 安装量索引；仓库已改为 `skills/<name>/` 布局，需重新检查索引状态。`skills list -g` 显示 tracked 不等于 skills.sh 已收录。 |
-| WorkBuddy 开放平台 | ⏳ 待提交 | 需开发者认证；提审配额（当日 5 次 / 当月 20 次）。使用 `-dir` 包。 |
+| WorkBuddy 开放平台 | 🕒 审核中 | 2026-11-15 已提交 `-dir` 包，技能 ID `os_d12a959583509f94`，预计 7 个工作日。 |
+| SkillHub（腾讯） | ⏳ 待提交（GitHub 导入） | 绑定 GitHub 后可直接识别 `skills/<name>/`，无需本地上传 zip。slug `workbuddy-conversation-manager`，版本 1.4.0。 |
 | Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布，机审。使用 `-dir` 包。 |
 | skillstore.io / Skill Vault | ⏳ 可选 | 第三方目录，填仓库地址或上传 SKILL.md。 |
 
@@ -62,7 +63,7 @@ python skills/workbuddy-conversation-manager/scripts/build_pkg.py
 - **版本**：1.4.0
 - **分类**：开发工具 / 效率工具 / 数据管理
 - **许可证**：MIT
-- **头像**：`skills/workbuddy-conversation-manager/assets/icon-512.png`（512×512，464 KB，≤500 KB）
+- **头像**：`skills/workbuddy-conversation-manager/assets/icon-512.png`（512×512，105 KB，≤500 KB；官方 WorkBuddy 图标 + 会话徽标）
 
 **中文简介**
 
@@ -112,14 +113,22 @@ WorkBuddy/Qoder 市场解析 `SKILL.md` 时会检查以下字段：
 5. 上传头像 `assets/icon-512.png`，补充分类与使用说明。
 6. 提交审核；当日 5 次 / 当月 20 次提审配额。
 
-## 渠道二：Qoder 技能市场
+## 渠道二：SkillHub
+
+1. 绑定 GitHub 账号后打开 <https://skillhub.cn/dashboard/publish>，选择「发布 Skill → 从 GitHub 导入」。
+2. 平台会扫描已绑定仓库的 `skills/<name>/` 目录，直接勾选 `workbuddy-conversation-manager`。
+3. 首次发布填 slug、显示名称、版本、变更说明；导入源在 GitHub，后续更新直接刷新仓库即可。
+4. 若 GitHub 导入不可用，再退回「本地上传」，使用 `-dir` 包。
+5. 已发布条目在「我的 Skills」显示安全审核状态，审核通过后同步到技能广场。
+
+## 渠道三：Qoder 技能市场
 
 1. 客户端「扩展 → 技能 → 添加技能」可先本地自用。
 2. 公开市场走「拓展发布」，上传 `workbuddy-conversation-manager-dir-1.4.0.zip`。
 3. 参考文档：<https://docs.qoder.com/zh/qoderwork/skill-marketplace-guidelines>
 4. 机审为主，通常几分钟出结果。
 
-## 渠道三：skills.sh
+## 渠道四：skills.sh
 
 - 没有手动提交入口；按仓库安装量索引。
 - 已验证 `https://skills.sh/HuaHua-Technophile/workbuddy-conversation-manager` 当前为 404。
@@ -132,7 +141,7 @@ npx skills add HuaHua-Technophile/workbuddy-conversation-manager
 pnpm dlx skills add HuaHua-Technophile/workbuddy-conversation-manager -g -y
 ```
 
-## 渠道四：第三方目录（可选）
+## 渠道五：第三方目录（可选）
 
 - **skillstore.io**：打开 <https://skillstore.io/submit>，填仓库地址。
 - **Skill Vault**：打开 <https://skillvault.md>，登录后上传 `SKILL.md`。
