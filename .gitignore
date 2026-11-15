@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+dist/
+*.zip
+workbuddy-backups/
+workbuddy-rename-backup*/
+wb-exp/
+_skill_test/
+.DS_Store
