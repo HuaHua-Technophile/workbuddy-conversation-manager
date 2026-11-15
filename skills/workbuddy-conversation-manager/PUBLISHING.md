@@ -6,7 +6,7 @@
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| GitHub | ✅ v1.4.0 已发布；main 含 v1.4.1 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.4.1 未打 tag，避免与已手动发布的 SkillHub 1.4.1 重复。 |
+| GitHub | ✅ v1.4.1 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.4.1 的 Release 手动创建，避免 CI 重复发布已存在的 SkillHub 1.4.1；下一版配置 `SKILLHUB_KEY` 后走 tag 自动化。 |
 | SkillHub（腾讯） | 🕒 v1.4.1 审核中；v1.4.0 在线 | CLI 手动发布成功，skillId `322039`；slug `workbuddy-conversation-manager`。`iconUrl` 已异步更新为仓库 jsdelivr，`category=dev-programming`。 |
 | WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.4.1 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录 | 无手动提交入口，按 `npx skills add` 安装量索引；已改为 `skills/<name>/` 布局，等平台扫描。 |

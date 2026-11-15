@@ -1,55 +1,89 @@
-# WorkBuddy Conversation Manager
+<p align="center">
+  <img src="skills/workbuddy-conversation-manager/assets/icon-512.png"
+       width="128" height="128" alt="WorkBuddy Conversation Manager">
+</p>
 
-![WorkBuddy Conversation Manager](skills/workbuddy-conversation-manager/assets/icon-512.png)
+<h1 align="center">WorkBuddy Conversation Manager</h1>
 
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)]()
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+<p align="center">给 AI Agent 用的 WorkBuddy 本地会话管理技能</p>
 
-一个给 AI Agent 用的技能：管理本机 **WorkBuddy** 的会话——体检、筛选、按完整对话历史两步式重命名、迁移任务/空间、备份与回滚。
+<p align="center">
+  <a href="https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases"><img src="https://img.shields.io/github/v/release/HuaHua-Technophile/workbuddy-conversation-manager?label=release&color=2ea44f" alt="Release"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
+  <a href="#"><img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+</p>
 
-> A portable agent skill for managing local **WorkBuddy** sessions: doctor, list/filter, two-step rename from full transcripts, move between tasks/spaces, backup & rollback.
+一个给 AI Agent 用的技能：管理本机 **WorkBuddy** 的会话与空间——10 项体检、筛选、按完整对话历史两步式重命名、跨空间迁移（连同记忆和产出）、整库备份与回滚。
+
+> A portable agent skill for managing local **WorkBuddy** sessions: doctor, list/filter, two-step rename from full transcripts, move between spaces with memory and outputs, backup & rollback.
 
 ---
 
 ## 为什么需要它
 
-WorkBuddy 侧栏标题通常只反映首条消息，长对话真正的落点在中后段；空间迁移还涉及 JSONL、侧栏快照和（可选的）记忆/产出。这个技能把「读完整历史 → 起准确标题 → 安全写回」和「改归属」变成可重复的流程，并默认先干跑、自动备份。
+WorkBuddy 侧栏标题通常只取对话开头，长对话真正的落点往往在中后段：
 
-## 能做什么
+- `在本机把工具包里的旧镜像换成新镜像`，通读后才发现真正要处理的是驱动兼容和启动项；
+- `请根据今天的记录整理一下`，实际结论是三个空间该合并、两条会话该改名。
 
-| 命令 | 用途 | 写库 |
-|---|---|---|
-| `doctor` | 10 项体检：数据库、WAL、表结构、进程、会话文件、目录一致性、空目录、快照、标题一致性、备份 | 否 |
-| `list` | 关键词/cwd/时间/区域/账号筛选 | 否 |
-| `rename --export` | 导出完整历史，按字数 LPT 自动分片 | 否 |
-| `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
-| `move` | 迁移任务/空间；默认连记忆、产出和会话文件一起搬 | 是 |
-| `backup` | 整库快照，默认保留最近 10 份 | 否 |
-| `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
+rename 只改标题还不够。把一条会话从 A 空间移到 B 空间时，WorkBuddy 的正文路径由 `cwd` 推导，数据库、JSONL、同名子目录、侧栏快照、记忆段落和产出文件都要一起处理，否则应用重启后可能读不到、记忆丢失或链接失效。
 
-**不做**：不删除会话、不改对话正文、不重建索引、不操作云端或其他设备的会话。
+这个技能把「读完整历史 → 生成准确标题 → 安全写回」和「改归属 + 搬全套文件」变成可重复、可回滚的流程，并默认先干跑、按对象备份。
+
+## 亮点
+
+- **两步式重命名**：`rename --export` 导出完整历史，Agent 生成 `titles.json`，`rename --import` 写回；默认只打印计划，`--apply` 才落盘。
+- **自动分片**：按字数做 LPT 均衡分片，大批量会话可以交给多个子智能体并行处理。
+- **真迁移**：`move` 默认搬会话 JSONL、同名子目录、该会话写入的记忆段落与产出；旧路径留硬链接，历史链接不断。
+- **10 项体检**：数据库、WAL、表结构、进程、会话文件、项目目录一致性、空目录、侧栏快照、标题一致性、备份。
+- **安全兜底**：每条会话独立事务；失败只回滚该条；目标文件重名先备份；搬空的源目录自动清理。
+- **可演练**：`--workbuddy-home` 指向数据库副本，和真库互不影响；写库前可以先跑一遍完整流程。
+
+## 安装
+
+技能是纯目录 + Python 标准库脚本，不需要 `pip install`。
+
+```bash
+git clone https://github.com/HuaHua-Technophile/workbuddy-conversation-manager.git
+cd workbuddy-conversation-manager
+
+python install.py                 # 装到 ~/.workbuddy/skills
+python install.py --to ~/.qoder/skills
+python install.py --targets all   # WorkBuddy / Qoder / .agents 三处都装
+```
+
+也可以直接复制技能目录：
+
+```bash
+cp -r skills/workbuddy-conversation-manager "$HOME/.workbuddy/skills/"
+```
+
+安装后验证：
+
+```bash
+python "$HOME/.workbuddy/skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py" doctor
+```
 
 ## 快速开始
 
+以下命令在已安装的技能目录执行（`cd ~/.workbuddy/skills/workbuddy-conversation-manager`）。
+
 ```bash
 # 1. 体检
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py doctor
+python scripts/workbuddy_sessions.py doctor
 
-# 2. 看会话
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py list --all-users --limit 20
+# 2. 看看有哪些会话
+python scripts/workbuddy_sessions.py list --limit 20
 
-# 3. 导出完整历史并分片
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py rename --export --all-users --shards 8 --out ./wb-exp
+# 3. 导出完整历史（大批量加 --shards 自动均衡分片）
+python scripts/workbuddy_sessions.py rename --export --shards 6 --out ./wb-exp
 
-# 4. agent 读 ./wb-exp/*.txt 与 shards/groupN.json，产出 titles.json
+# 4. 让 Agent 读 ./wb-exp/*.txt，产出 titles.json，然后先干跑
+python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json
 
-# 5. 干跑
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json
-
-# 6. 确认后落盘
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply \
-  --backup-dir ./workbuddy-rename-backup
+# 5. 确认无误后落盘
+python scripts/workbuddy_sessions.py rename --import ./wb-exp/titles.json --apply
 ```
 
 `titles.json` 格式：
@@ -61,86 +95,65 @@ python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py renam
 ]
 ```
 
-`sid` 支持完整 UUID 或前 8 位；`new_title` 可不带前缀，`category` 会自动补成 `[分类] 标题`。
+`sid` 支持完整 UUID 或前 8 位；`new_title` 可不带前缀，`category` 会自动补成 `[分类] 标题`。标题默认长度 **20–30 字**，可用 `--min-title-len` / `--max-title-len` 调整到 **10–30**。
 
-标题长度默认 **20–30 字**，可用 `--min-title-len` / `--max-title-len` 调整到 **10–30**。前缀和空格计入长度。
-
-## 迁移
+## 迁移会话
 
 ```bash
-# 默认：改归属 + 搬会话 JSONL/子目录 + 搬该会话的记忆段落与产出
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
+# 默认：改归属 + 搬会话 JSONL/子目录 + 搬记忆与产出
+python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
 
 # 只要元数据，不搬记忆与产出
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
+python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
 
 # 目标空间不存在时，用首个迁入会话创建空间（目录需已存在）
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
-# 确认要新建目录时
-python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
+python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
+# 确认允许新建目录
+python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
 ```
 
-WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，并迁移该会话的记忆和产出。搬空的源项目目录默认自动删除，`--keep-orphans` 可保留。
+搬空的源项目目录默认自动删除，`--keep-orphans` 可保留；删除清单会写入本次迁移的 `batch.json`。
+
+## 命令总览
+
+| 命令 | 用途 | 写库 |
+|---|---|---|
+| `doctor` | 10 项体检：数据库、WAL、表结构、进程、会话文件、目录一致性、空目录、快照、标题一致性、备份 | 否 |
+| `list` | 关键词 / cwd / 时间 / 区域 / 账号筛选 | 否 |
+| `rename --export` | 导出完整历史，按字数 LPT 自动分片 | 否 |
+| `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
+| `move` | 迁移任务/空间；默认连记忆、产出和会话文件一起搬 | 是 |
+| `backup` | 整库快照，默认保留最近 10 份 | 否 |
+| `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
+
+**不做**：不删除会话、不改对话正文、不重建索引、不操作云端或其他设备的会话。
 
 ## 安全设计
 
 - **默认干跑**：`rename --import` 不加 `--apply` 只打印 `[PLAN]`。
 - **按对象备份**：迁移每条一份 manifest；重命名按批次备份数据库、JSONL 和两个账号的侧栏快照。
-- **每条独立事务**：某条失败只影响它自己，其余继续。
+- **每条独立事务**：某条失败只影响它自己，其余继续；失败会说明回滚是否成功。
 - **热写可选**：允许 WorkBuddy 运行中写入；要硬性拦截加 `--require-closed`（退出码 3）。
 - **副本演练**：`--workbuddy-home` 可指向数据库副本，与真库互不影响。
-- **默认搬全套**：归属、会话文件、记忆、产出一起迁移；只要元数据时用 `--metadata-only`。
-- **自动清理空源目录**：搬完后无会话的源项目目录自动删除，清单写入 `removed_dirs`。
 - **不覆盖**：目标已有同名文件先备份；备份目录自动去重。
-
-## 安装与仓库结构
-
-```
-workbuddy-conversation-manager/
-├── install.py
-├── README.md
-├── LICENSE
-├── dist/                              # 构建产物（git 忽略）
-└── skills/
-    └── workbuddy-conversation-manager/
-        ├── SKILL.md
-        ├── CHANGELOG.md
-        ├── PUBLISHING.md
-        ├── assets/                    # 头像与市场素材
-        ├── scripts/
-        ├── references/
-        └── examples/
-```
-
-仓库采用 `skills/<name>/` 布局便于目录站索引；宿主要求扁平技能目录，用根目录 `install.py` 安装：
-
-```bash
-python install.py --targets all
-# 或只装一个宿主
-python install.py --to ~/.qoder/skills
-```
-
-安装后可直接验证：
-
-```bash
-python "$HOME/.qoder/skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py" doctor
-```
-
-`skills.sh` 收录状态待复核，`skills list -g` 显示 tracked 不等于已出现在目录页。
-
-详见 [`skills/workbuddy-conversation-manager/references/install.md`](skills/workbuddy-conversation-manager/references/install.md)。
 
 ## 文档
 
 | 文件 | 内容 |
 |---|---|
-| [`skills/workbuddy-conversation-manager/SKILL.md`](skills/workbuddy-conversation-manager/SKILL.md) | 技能主文档：命令、工作流、安全规则 |
+| [`SKILL.md`](skills/workbuddy-conversation-manager/SKILL.md) | 技能主文档：完整命令、工作流、安全规则 |
 | [`references/workbuddy-storage.md`](skills/workbuddy-conversation-manager/references/workbuddy-storage.md) | 表结构、路径编码、标题存储、验证 SQL、已知坑 |
 | [`references/rename-classify.md`](skills/workbuddy-conversation-manager/references/rename-classify.md) | 两步式重命名、LPT 分片、子智能体模板 |
 | [`references/cases.md`](skills/workbuddy-conversation-manager/references/cases.md) | 70 条对话重命名实测与踩坑 |
 | [`references/install.md`](skills/workbuddy-conversation-manager/references/install.md) | 三端安装与验证 |
 | [`CHANGELOG.md`](skills/workbuddy-conversation-manager/CHANGELOG.md) | 版本记录 |
-| [`PUBLISHING.md`](skills/workbuddy-conversation-manager/PUBLISHING.md) | 各平台发布状态与提交材料 |
+| [`PUBLISHING.md`](skills/workbuddy-conversation-manager/PUBLISHING.md) | 各平台发布状态、CLI 发布与 CI 自动化 |
+
+## 环境要求
+
+- Python 3.9+
+- WorkBuddy（Windows），已登录并产生过会话
+- 对 `~/.workbuddy` 的读写权限
 
 ## 已知限制
 
@@ -149,11 +162,12 @@ python "$HOME/.qoder/skills/workbuddy-conversation-manager/scripts/workbuddy_ses
 - 不删除会话、不改对话正文、不重建搜索索引。
 - 默认迁移会搬记忆与产出；只要元数据时加 `--metadata-only`。
 
-## 环境要求
+## 发布
 
-- Python 3.9+
-- WorkBuddy（Windows），已登录并产生过会话
-- 对 `~/.workbuddy` 的读写权限
+- **GitHub Release**：latest 见 [Releases](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases)。
+- **SkillHub**：[workbuddy-conversation-manager](https://skillhub.cn/skills/user_3c4d2464/workbuddy-conversation-manager)（1.4.1 审核中）。
+- **WorkBuddy 开放平台**：手动提交 `-dir` 包；该平台暂无 API / CLI / CI。
+- 仓库已接入 `.github/workflows/release.yml`：push `v*` tag 自动构建并发布 GitHub Release，配置 `SKILLHUB_KEY` 后可同步发布 SkillHub。
 
 ## License
 
