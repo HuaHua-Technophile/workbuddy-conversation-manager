@@ -7,7 +7,7 @@
 | 平台 | 状态 | 说明 |
 |---|---|---|
 | GitHub | ✅ v1.5.0 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.5.0 的 Release 手动创建，SkillHub 新 slug 由本机 CLI 发布；旧 slug 已下架并删除。下一版配置 `SKILLHUB_KEY` 后走 tag 自动化。 |
-| SkillHub（腾讯） | 🕒 v1.5.0 审核中 | 新 slug `workbuddy-task-manager` 已发布，skillId `322122`；旧 slug 已下架并删除（404）。`iconUrl` 指向仓库 jsdelivr，`category=dev-programming`。 |
+| SkillHub（腾讯） | ✅ v1.5.0 已发布 | 新 slug `workbuddy-task-manager` 已发布，skillId `322122`；旧 slug 已下架并删除（404）。`iconUrl` 指向仓库 jsdelivr，`category=dev-programming`。 |
 | WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.5.0 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录 | 无手动提交入口，按 `npx skills add` 安装量索引；已改为 `skills/<name>/` 布局，等平台扫描。 |
 | Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布。 |
@@ -192,7 +192,7 @@ python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbudd
 
 发布后在 <https://skillhub.cn/dashboard> 查看「安全审核中」；审核通过后详情页才完整可见。
 
-本机实测（2026-11-15）：v1.5.0 使用新 slug 发布，`skillId=322122`；`iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`。审核通过后展示名与概述使用“任务 / 分组”。
+本机实测（2026-11-15）：v1.5.0 使用新 slug 发布，`skillId=322122`；`iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`。已过审，展示名与概述使用“任务 / 分组”。
 
 ### CI 的两个坑
 

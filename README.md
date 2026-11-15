@@ -189,7 +189,7 @@ python scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-gr
 | 渠道 | 状态 | 入口 |
 |---|---|---|
 | GitHub | v1.5.0 已发布 | [Releases](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases) |
-| SkillHub | 1.5.0 审核中 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-task-manager) |
+| SkillHub | 1.5.0 已发布 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-task-manager) |
 | WorkBuddy 开放平台 | 待上传 1.5.0 `-dir` 包 | [控制台](https://open.workbuddy.cn) |
 | skills.sh | 未收录 | 无手动入口 |
 
