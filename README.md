@@ -87,7 +87,15 @@ WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读
 
 ## 安装
 
-把整个目录放进宿主的用户级技能目录：
+一键安装（skills.sh）：
+
+```bash
+npx skills add HuaHua-Technophile/workbuddy-conversation-manager
+# 本机 npm 缓存异常时可用 pnpm
+pnpm dlx skills add HuaHua-Technophile/workbuddy-conversation-manager -g -y
+```
+
+或把整个目录放进宿主的用户级技能目录：
 
 ```bash
 cp -r workbuddy-conversation-manager "$HOME/.qoder/skills/"

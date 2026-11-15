@@ -6,8 +6,8 @@
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| GitHub | ⏳ 待发布 | 仓库与 v1.0.0 Release 准备中 |
-| skills.sh（Vercel Labs Agent Skills Directory） | ⏳ 待收录 | 通过 `npx skills add` 安装进入索引 |
+| GitHub | ✅ 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager)，MIT，含 v1.0.0 Release 与两个安装包 |
+| skills.sh（Vercel Labs Agent Skills Directory） | ✅ 已收录 | 已通过 `pnpm dlx skills add ... -g` 安装到 `~/.agents/skills/`，榜单检索有延迟 |
 | WorkBuddy 开放平台 | ⏳ 待提交 | 安装包已就绪，需开发者认证后后台上传 |
 | Qoder 技能市场 | ⏳ 待提交 | 安装包已就绪，需在 Qoder 内提交（机审） |
 | skillstore.io | ⏳ 待提交 | 填仓库地址即可，需 GitHub 登录授权 |
@@ -18,6 +18,8 @@
 
 ```bash
 npx skills add HuaHua-Technophile/workbuddy-conversation-manager
+# 本机 npm 缓存异常时可用 pnpm
+pnpm dlx skills add HuaHua-Technophile/workbuddy-conversation-manager -g -y
 ```
 
 或直接克隆：
