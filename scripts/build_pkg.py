@@ -13,7 +13,7 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAME = "workbuddy-conversation-manager"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 FILES = ["SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "PUBLISHING.md"]
 DIRS = ["scripts", "references", "examples"]

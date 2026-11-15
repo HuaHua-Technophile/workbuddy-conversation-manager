@@ -6,7 +6,7 @@ description_en: Manage local WorkBuddy sessions — doctor, list/filter, two-ste
 display_name: WorkBuddy Conversation Manager
 display_name_zh: WorkBuddy会话管理
 display_name_en: WorkBuddy Conversation Manager
-version: 1.1.0
+version: 1.2.0
 tags: [WorkBuddy, 会话管理, 重命名, 迁移, SQLite]
 license: MIT
 ---
@@ -39,6 +39,7 @@ Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full 
 - 侧栏快照：`~/.workbuddy/<user-id>/sidebar-list-snapshot.json`；应用启动会按数据库重建。
 - 本机可能有多个 `user_id`；`list` / `rename --export` / `rename --import` 用 `--all-users` 覆盖全部账号。
 - 迁移默认同时搬会话 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致对话读不到；只要元数据时加 `--metadata-only`。
+- 空间由 `is_playground=0` 的会话 `cwd` 派生；目标空间不存在时用 `move --create-space --to <绝对路径>` 创建，首个迁入会话作为种子。
 - 备份目录自动去重，同名或同一秒追加时间戳；文本文件用临时文件 + `os.replace` 原子写入。
 
 ## 安装与验证
@@ -199,6 +200,9 @@ rename --import titles.json --apply      # 落盘
 list --all-users
 move --session <sid> --to "D:/B/NAS"
 # 默认连记忆/产出一起搬；只要元数据加 --metadata-only
+
+# 目标空间不存在时，用首个迁入会话创建空间
+python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
 ```
 
 ## 安全规则
@@ -232,7 +236,8 @@ move --session <sid> --to "D:/B/NAS"
 | 迁移后对话打不开 | 只改了数据库 cwd，JSONL 没跟着移动 | 用本技能 `move`，它会同改 DB 与 JSONL；不要手工只改库 |
 | 迁移后记忆/产出没跟过去 | 使用了 `--metadata-only` | 去掉该参数重跑，或手工迁移 |
 | doctor 提示标题不一致 | 应用缓存未重建 | 重启应用；仍不一致则重跑导入 |
-| 找不到目标空间 | 目标没有 `is_playground=0` 的会话 | 先在 WorkBuddy 里打开该空间 |
+| 找不到目标空间 | 目标没有 `is_playground=0` 的会话 | 加 `--create-space`，或先在 WorkBuddy 里打开该空间 |
+| 想新建空空间 | WorkBuddy 空间由会话 cwd 派生 | 先迁入一条种子会话；不存在空空间 |
 | 备份目录带时间戳后缀 | 同名或同一秒已存在 | 正常保护行为，用最新目录 |
 | 子智能体漏条 | 清单没对齐 | 用 `manifest.json` 的 sid 做差集核对 |
 | `python -c` 反引号被执行 | Bash 命令替换 | 长脚本写成 `.py` 文件再运行 |

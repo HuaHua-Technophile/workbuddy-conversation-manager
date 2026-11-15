@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 
@@ -980,6 +980,33 @@ def select_by_ids(wb: WorkBuddy, ids_text: str):
     return unique
 
 
+def normalize_space_path(value: str) -> str:
+    s = str(value).strip().strip('"').replace("\\", "/")
+    s = re.sub(r"/+", "/", s)
+    if len(s) >= 2 and s[1] == ":":
+        s = s[0].upper() + s[1:]
+    if len(s) > 3:
+        s = s.rstrip("/")
+    if not re.match(r"^[A-Za-z]:/", s):
+        raise UserError("--create-space 需要 Windows 绝对路径，例如 D:/VMs")
+    return s
+
+
+def resolve_target_space(wb: WorkBuddy, value: str, create: bool):
+    try:
+        return wb.resolve_space(value)
+    except UserError as exc:
+        if not create or "找不到已有空间" not in str(exc):
+            raise
+        path = normalize_space_path(value)
+        target = Path(path)
+        if target.exists() and not target.is_dir():
+            raise UserError(f"目标路径不是目录：{path}")
+        target.mkdir(parents=True, exist_ok=True)
+        print(f"[INFO] 新建空间：{path}（首个迁入会话作为种子）")
+        return path
+
+
 def cmd_move(args):
     wb = WorkBuddy(Path(args.workbuddy_home), args.user_id)
     try:
@@ -989,13 +1016,14 @@ def cmd_move(args):
         if args.running_check and app_running():
             print("提示：检测到 WorkBuddy 正在运行。按配置允许热写；若侧栏未刷新，请切换空间或重启应用。")
         sessions = select_sessions(wb, args.session)
+        create = bool(getattr(args, "create_space", False))
         if args.mode == "space":
             if not args.to:
                 raise UserError("迁移到空间时必须提供 --to。")
             if len(args.to) == 1:
-                targets = [wb.resolve_space(args.to[0])] * len(sessions)
+                targets = [resolve_target_space(wb, args.to[0], create)] * len(sessions)
             elif len(args.to) == len(sessions):
-                targets = [wb.resolve_space(t) for t in args.to]
+                targets = [resolve_target_space(wb, t, create) for t in args.to]
             else:
                 raise UserError("--to 的数量必须是 1，或与会话数量一致。")
         else:
@@ -1891,6 +1919,8 @@ def build_parser():
     mv.add_argument("--to", action="append", default=[], help="目标空间路径/名称；可重复")
     mv.add_argument("--mode", choices=["space", "task"], default="space")
     mv.add_argument("--backup-dir", default=None)
+    mv.add_argument("--create-space", action="store_true",
+                    help="目标空间不存在时按绝对路径创建，首个迁入会话作为种子")
     asset_group = mv.add_mutually_exclusive_group()
     asset_group.add_argument("--with-assets", dest="with_assets", action="store_true",
                              help="迁移记忆与产出（默认）")

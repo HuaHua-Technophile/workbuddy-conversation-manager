@@ -119,6 +119,16 @@ WHERE is_playground = 0 AND deleted_at IS NULL;
 
 用户消息需要去掉 `system-reminder`、`turn_aborted`、`<user_query>` 包装；`task-notification` 是后台任务通知，不是用户诉求，跳过。
 
+## 空间创建
+
+WorkBuddy 没有独立的 workspace 表；空间由 `is_playground=0` 的会话 `cwd` 派生。要新建一个空间：
+
+```bash
+python <skill-dir>/scripts/workbuddy_sessions.py move --session <sid> --to "D:/VMs" --create-space
+```
+
+目录不存在时脚本会创建；首个迁入的会话成为空间种子。不存在“空空间”这种形态。
+
 ## 迁移：默认搬全套
 
 `move` 默认做：

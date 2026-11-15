@@ -71,6 +71,9 @@ python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇�
 
 # 只要元数据，不搬记忆与产出
 python scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
+
+# 目标空间不存在时，用首个迁入会话创建空间
+python scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
 ```
 
 WorkBuddy 按 `cwd` 推导正文路径，所以只改数据库会导致对话读不到；默认模式会同步 JSONL 与同名子目录，并迁移该会话的记忆和产出。
