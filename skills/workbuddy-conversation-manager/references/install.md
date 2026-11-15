@@ -40,7 +40,7 @@ cp -r skills/workbuddy-conversation-manager "$HOME/.qoder/skills/"
 python "$HOME/.qoder/skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py" doctor
 ```
 
-`doctor` 10 项全 `OK` 说明数据库、会话文件、目录一致性、快照和备份都正常。
+`doctor` 10 项全 `OK` 说明数据库、任务文件、目录一致性、快照和备份都正常。
 
 ## 常见问题
 

@@ -1,62 +1,62 @@
 ---
 slug: workbuddy-conversation-manager
-displayName: WorkBuddy会话管理
-summary: 管理 WorkBuddy 本地会话与空间：按完整历史两步式重命名、任务/空间迁移（含记忆与产出）、备份回滚、10 项体检。默认干跑并按对象备份。
+displayName: WorkBuddy任务管理
+summary: 管理 WorkBuddy 本地任务与分组：按完整历史两步式重命名、任务/分组迁移（含记忆与产出）、备份回滚、10 项体检。默认干跑并按对象备份。
 iconUrl: https://cdn.jsdelivr.net/gh/HuaHua-Technophile/workbuddy-conversation-manager@main/skills/workbuddy-conversation-manager/assets/icon-512.png
 category: dev-programming
 homepage: https://github.com/HuaHua-Technophile/workbuddy-conversation-manager
 name: workbuddy-conversation-manager
-description: 管理本机 WorkBuddy 的会话：体检、列表筛选、两步式重命名（导出完整历史/导入标题）、迁移任务/空间、整库备份与回滚。用于「重命名 WorkBuddy 对话、给对话改标题、整理会话名称、移动对话、换空间、把对话放到某个空间、列出 WorkBuddy 会话、WorkBuddy 体检、备份 WorkBuddy 数据」等请求；只操作本机 ~/.workbuddy 数据。
-description_zh: 管理 WorkBuddy 本地会话：体检、筛选、两步式重命名、任务/空间迁移、备份回滚；默认干跑，按对象备份。
-description_en: Manage local WorkBuddy sessions — doctor, list/filter, two-step rename from full transcripts, move between tasks/spaces, backup & rollback; dry-run by default with per-object backups.
-display_name: WorkBuddy Conversation Manager
-display_name_zh: WorkBuddy会话管理
-display_name_en: WorkBuddy Conversation Manager
+description: 管理本机 WorkBuddy 的任务：体检、列表筛选、两步式重命名（导出完整历史/导入标题）、迁移任务/分组、整库备份与回滚。用于「重命名 WorkBuddy 任务、给任务改标题、整理任务名称、移动任务、换分组、把任务放到某个分组、列出 WorkBuddy 任务、WorkBuddy 体检、备份 WorkBuddy 数据」等请求；只操作本机 ~/.workbuddy 数据。
+description_zh: 管理 WorkBuddy 本地任务：体检、筛选、两步式重命名、任务/分组迁移、备份回滚；默认干跑，按对象备份。
+description_en: Manage local WorkBuddy tasks — doctor, list/filter, two-step rename from full transcripts, move between tasks/groups, backup & rollback; dry-run by default with per-object backups.
+display_name: WorkBuddy Task Manager
+display_name_zh: WorkBuddy任务管理
+display_name_en: WorkBuddy Task Manager
 examples_zh:
-  - "把标题太短的 WorkBuddy 对话批量重命名"
-  - "把 NAS 相关对话归到 NAS 空间，记忆和产出一起带过去"
-  - "新建 D:/VMs 空间并迁入虚拟机会话"
+  - "把标题太短的 WorkBuddy 任务批量重命名"
+  - "把 NAS 相关任务归到 NAS 分组，记忆和产出一起带过去"
+  - "新建 D:/VMs 分组并迁入虚拟机任务"
 examples_en:
-  - "Batch rename WorkBuddy conversations whose titles are too short"
-  - "Move NAS-related conversations into the NAS space with memory and outputs"
-  - "Create a D:/VMs space and move VM conversations into it"
+  - "Batch rename WorkBuddy tasks whose titles are too short"
+  - "Move NAS-related tasks into the NAS group with memory and outputs"
+  - "Create a D:/VMs group and move VM tasks into it"
 author: HuaHua
-version: 1.4.1
-tags: [WorkBuddy, 会话管理, 重命名, 迁移, SQLite]
+version: 1.4.2
+tags: [WorkBuddy, 任务管理, 分组, 重命名, 迁移, SQLite]
 license: MIT
 ---
 
-# WorkBuddy 会话管理
+# WorkBuddy 任务管理
 
-Manage local WorkBuddy sessions: doctor, list/filter, two-step rename from full transcripts, move between tasks/spaces, backup/rollback.
+Manage local WorkBuddy tasks: doctor, list/filter, two-step rename from full transcripts, move between tasks/groups, backup/rollback.
 
 ## 这个技能做什么
 
 | 命令 | 用途 | 写库 |
 |---|---|---|
-| `doctor` | 10 项体检：库、WAL、表结构、进程、会话文件、目录一致性、空目录、快照、标题一致性、备份 | 否 |
-| `list` | 列出会话，支持关键词/cwd/时间/区域/账号筛选 | 否 |
-| `rename --export` | 导出完整对话历史，按字数 LPT 自动分片 | 否 |
+| `doctor` | 10 项体检：库、WAL、表结构、进程、任务文件、目录一致性、空目录、快照、标题一致性、备份 | 否 |
+| `list` | 列出任务，支持关键词/cwd/时间/区域/账号筛选 | 否 |
+| `rename --export` | 导出完整任务历史，按字数 LPT 自动分片 | 否 |
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
-| `move` | 迁移会话到任务/空间；默认连记忆、产出和会话文件一起搬 | 是 |
+| `move` | 迁移任务到任务/分组；默认连记忆、产出和任务文件一起搬 | 是 |
 | `backup` | 整库快照，默认保留最近 10 份 | 否 |
 | `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
 | `extract` / `apply-titles` | 旧命令，保留兼容；建议改用 `rename` | 部分 |
 
-**不做什么**：不删除会话、不改对话正文、不重建搜索索引、不操作云端或其他设备的会话。
+**不做什么**：不删除任务、不改任务正文、不重建搜索索引、不操作云端或其他设备的任务。
 
 ## 核心事实
 
 - 数据库：`~/.workbuddy/workbuddy.db`（WAL 模式）；可用 `--workbuddy-home` 指向副本做演练。
-- 会话表 `sessions`：`cwd` 决定空间归属，`is_playground` 区分 `1=任务` / `0=空间`。
-- 对话正文：`~/.workbuddy/projects/<encoded-cwd>/<session-id>.jsonl`；子代理、工具结果在同名目录。
+- 任务表 `sessions`：`cwd` 决定分组归属，`is_playground` 区分 `1=任务` / `0=分组`。
+- 任务正文：`~/.workbuddy/projects/<encoded-cwd>/<session-id>.jsonl`；子代理、工具结果在同名目录。
 - 标题三层：JSONL 最后一条 `custom-title` 事件是有效标题；数据库 `title` / `custom_title` 和侧栏快照 `title` 是展示与缓存层，三层要一起写。
 - 产出识别三路：`artifact-index`、`changes-index` 详情、JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`；正文解析必须在搬走 JSONL 之前完成。
 - 侧栏快照：`~/.workbuddy/<user-id>/sidebar-list-snapshot.json`；应用启动会按数据库重建。
 - 本机可能有多个 `user_id`；`list` / `rename --export` / `rename --import` 用 `--all-users` 覆盖全部账号。
-- 迁移默认同时搬会话 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致对话读不到；只要元数据时加 `--metadata-only`。
+- 迁移默认同时搬任务 JSONL/子目录、记忆与产出。WorkBuddy 按 `cwd` 推导正文路径，只改数据库会导致任务读不到；只要元数据时加 `--metadata-only`。
 - 搬完后源项目目录若已无任何 `*.jsonl`，默认自动删除；`--keep-orphans` 保留。删除清单写入 `batch.json` 的 `removed_dirs`。
-- 空间由 `is_playground=0` 的会话 `cwd` 派生；目标空间不存在时用 `move --create-space --to <绝对路径>` 创建，首个迁入会话作为种子。
+- 分组由 `is_playground=0` 的任务 `cwd` 派生；目标分组不存在时用 `move --create-space --to <绝对路径>` 创建，首个迁入任务作为种子。
 - 备份目录自动去重，同名或同一秒追加时间戳；文本文件用临时文件 + `os.replace` 原子写入。
 
 ## 安装与验证
@@ -130,8 +130,8 @@ python <skill-dir>/scripts/workbuddy_sessions.py rename --export --area space --
 
 ```json
 [
-  {"sid": "6ed7f61f", "new_title": "整理 WorkBuddy 会话标题与分类", "category": "系统"},
-  {"session_id": "57cb405c-0997-47b8-bf97-d3fac97d42dc", "new_title": "把会话管理技能开源并部署笔记本"}
+  {"sid": "6ed7f61f", "new_title": "整理 WorkBuddy 任务标题与分类", "category": "系统"},
+  {"session_id": "57cb405c-0997-47b8-bf97-d3fac97d42dc", "new_title": "把任务管理技能开源并部署笔记本"}
 ]
 ```
 
@@ -154,7 +154,7 @@ python <skill-dir>/scripts/workbuddy_sessions.py rename --import titles.json --a
 - 默认长度 **20–30 字**；可用 `--min-title-len` / `--max-title-len` 调整，允许范围 **10–30**。
 - 前缀和空格计入长度；较长标题侧栏会截断，完整标题可悬浮或进详情查看。
 - 中文为主，NAS/DDNS/SSH/nvm/AI 等技术词保留英文；不加引号、书名号、句号、问号、emoji、路径分隔符。
-- 允许不同会话重名；默认覆盖已有自定义标题。
+- 允许不同任务重名；默认覆盖已有自定义标题。
 - 不写密码/令牌原文。
 
 标题写入三层：JSONL 追加 `custom-title`、数据库 `title/custom_title`、对应用户快照 `title`。写后逐条校验，不一致记 `verify_failed`。
@@ -162,18 +162,18 @@ python <skill-dir>/scripts/workbuddy_sessions.py rename --import titles.json --a
 ### move
 
 ```bash
-# 默认：改归属 + 搬会话 JSONL/子目录 + 搬该会话的记忆段落与产出
+# 默认：改归属 + 搬任务 JSONL/子目录 + 搬该任务的记忆段落与产出
 python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指"
 
 # 只要元数据，不搬记忆与产出
 python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X:/赞大拇指" --metadata-only
 ```
 
-空间模式会同步：
+分组模式会同步：
 
 1. `sessions.cwd` 与 `is_playground`；
 2. `projects/<encoded-cwd>/<sid>.jsonl` 与同名子目录（正文路径由 cwd 推导，必须同步）；
-3. 该会话写入的源工作空间记忆段落、产出文件及其旧路径链接；
+3. 该任务写入的源分组记忆段落、产出文件及其旧路径链接；
 4. 侧栏快照 `space.name`。
 
 产出识别三路合并：`artifact-index`、`changes-index` 详情、JSONL `function_call` 的 `Write` / `Edit` 路径；正文解析在搬走 JSONL 之前完成，避免搬完再解析导致空结果。
@@ -182,9 +182,9 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6ed7f61f --to "X
 
 搬空的源项目目录默认自动删除，`--keep-orphans` 保留，删除清单写入 `batch.json` 的 `removed_dirs`。
 
-目标空间不存在时加 `--create-space`；目标目录必须已存在，确认要新建目录时再加 `--allow-missing`。
+目标分组不存在时加 `--create-space`；目标目录必须已存在，确认要新建目录时再加 `--allow-missing`。
 
-每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、会话文件、记忆、产出和快照。
+每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、任务文件、记忆、产出和快照。
 
 ### backup / rollback
 
@@ -210,7 +210,7 @@ python <skill-dir>/scripts/workbuddy_sessions.py rollback --batch "<backup>/batc
 
 ## 典型工作流
 
-**批量重命名全部会话**
+**批量重命名全部任务**
 
 ```bash
 doctor
@@ -232,7 +232,7 @@ list --all-users
 move --session <sid> --to "D:/B/NAS"
 # 默认连记忆/产出一起搬；只要元数据加 --metadata-only
 
-# 目标空间不存在时，用首个迁入会话创建空间
+# 目标分组不存在时，用首个迁入任务创建分组
 python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space
 # 目录不存在且确认创建时
 python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D:/VMs" --create-space --allow-missing
@@ -244,15 +244,15 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D
 - 写操作默认允许热写；要强制应用退出加 `--require-closed`，退出码 `3`。
 - 每条迁移/重命名独立事务；失败只影响该条，其余继续。
 - 重命名按批次备份数据库、目标 JSONL 和两个账号的侧栏快照；旧标题只进 `rename-manifest.json`。
-- 迁移每条约一份 manifest；记录数据库行、会话文件、记忆、产出和快照。
-- 目标已有同名会话文件/产出文件时先备份，不覆盖。
-- 已删除会话默认跳过；`--include-deleted` 只用于查看。
+- 迁移每条约一份 manifest；记录数据库行、任务文件、记忆、产出和快照。
+- 目标已有同名任务文件/产出文件时先备份，不覆盖。
+- 已删除任务默认跳过；`--include-deleted` 只用于查看。
 - 子智能体只提案，不直接写库；写入由主智能体统一执行。
 
 ## 非目标与限制
 
-- 不删除会话、不改对话正文、不重建搜索索引。
-- 只处理本机 `~/.workbuddy` 的本地会话；云端或其他设备会话不在范围内。
+- 不删除任务、不改任务正文、不重建搜索索引。
+- 只处理本机 `~/.workbuddy` 的本地任务；云端或其他设备任务不在范围内。
 - 只支持 Windows（依赖 `tasklist`、本地路径与侧栏快照目录约定）。
 - 默认迁移会搬记忆与产出；只要元数据时显式 `--metadata-only`。
 - 标题长度、分类清单、是否覆盖自定义标题由调用方决定，技能不内置固定类目。
@@ -266,15 +266,15 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D
 | `rename --import` 只打印 `[PLAN]` | 默认干跑 | 加 `--apply` 落盘 |
 | 标题被拒绝 | 长度不在 10–30、缺少前缀、含禁用字符 | 调整标题或分类后重跑 |
 | `--require-closed` 返回 3 | WorkBuddy 正在运行 | 退出应用后重跑，或去掉该参数 |
-| 迁移后对话打不开 | 只改了数据库 cwd，JSONL 没跟着移动 | 用本技能 `move`，它会同改 DB 与 JSONL；不要手工只改库 |
+| 迁移后任务打不开 | 只改了数据库 cwd，JSONL 没跟着移动 | 用本技能 `move`，它会同改 DB 与 JSONL；不要手工只改库 |
 | 迁移后记忆/产出没跟过去 | 使用了 `--metadata-only` | 去掉该参数重跑，或手工迁移 |
 | 产出只搬到了旧索引里的少数文件 | 只依赖 `artifact-index`/`changes-index` | 1.4.0 起会补 JSONL `Write`/`Edit` 路径；确认 JSONL 仍在源目录后再搬 |
 | 仓库根没有 SKILL.md | 仓库是 `skills/<name>/` 结构，宿主要扁平目录 | 运行 `python install.py --targets all` |
 | doctor 提示标题不一致 | 应用缓存未重建 | 重启应用；仍不一致则重跑导入 |
-| 找不到目标空间 | 目标没有 `is_playground=0` 的会话 | 加 `--create-space`，或先在 WorkBuddy 里打开该空间 |
-| 想新建空空间 | WorkBuddy 空间由会话 cwd 派生 | 先迁入一条种子会话；不存在空空间 |
+| 找不到目标分组 | 目标没有 `is_playground=0` 的任务 | 加 `--create-space`，或先在 WorkBuddy 里打开该分组 |
+| 想新建空分组 | WorkBuddy 分组由任务 cwd 派生 | 先迁入一条种子任务；不存在空分组 |
 | `--create-space` 报目录不存在 | 默认要求目标目录已存在 | 确认路径后加 `--allow-missing` |
-| 迁移后旧项目目录还在 | 加了 `--keep-orphans`，或目录里还有其他会话 | 去掉该参数重跑；有会话的目录不会删 |
+| 迁移后旧项目目录还在 | 加了 `--keep-orphans`，或目录里还有其他任务 | 去掉该参数重跑；有任务的目录不会删 |
 | 备份目录带时间戳后缀 | 同名或同一秒已存在 | 正常保护行为，用最新目录 |
 | 子智能体漏条 | 清单没对齐 | 用 `manifest.json` 的 sid 做差集核对 |
 | `python -c` 反引号被执行 | Bash 命令替换 | 长脚本写成 `.py` 文件再运行 |
@@ -283,6 +283,6 @@ python <skill-dir>/scripts/workbuddy_sessions.py move --session 6cd29df7 --to "D
 
 - `references/workbuddy-storage.md`：表结构、路径编码、标题存储、验证 SQL、已知坑。
 - `references/rename-classify.md`：导出/分片/子智能体/导入/报告的完整流程。
-- `references/cases.md`：70 条对话重命名实测数据与踩坑记录。
+- `references/cases.md`：70 条任务重命名实测数据与踩坑记录。
 - `references/install.md`：Qoder、WorkBuddy、Codex 的安装位置与复制命令。
 - `README.md` / `CHANGELOG.md` / `PUBLISHING.md`：使用说明、版本记录、各平台发布状态。

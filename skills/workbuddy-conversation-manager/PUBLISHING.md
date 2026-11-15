@@ -6,9 +6,9 @@
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| GitHub | ✅ v1.4.1 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.4.1 的 Release 手动创建，避免 CI 重复发布已存在的 SkillHub 1.4.1；下一版配置 `SKILLHUB_KEY` 后走 tag 自动化。 |
-| SkillHub（腾讯） | 🕒 v1.4.1 审核中；v1.4.0 在线 | CLI 手动发布成功，skillId `322039`；slug `workbuddy-conversation-manager`。`iconUrl` 已异步更新为仓库 jsdelivr，`category=dev-programming`。 |
-| WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.4.1 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
+| GitHub | ✅ v1.4.2 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.4.2 的 Release 手动创建，SkillHub 1.4.2 由本机 CLI 发布；下一版配置 `SKILLHUB_KEY` 后走 tag 自动化。 |
+| SkillHub（腾讯） | 🕒 v1.4.2 审核中 | CLI 手动发布成功，skillId `322039`；slug `workbuddy-conversation-manager`。`iconUrl` 已异步更新为仓库 jsdelivr，`category=dev-programming`。 |
+| WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.4.2 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录 | 无手动提交入口，按 `npx skills add` 安装量索引；已改为 `skills/<name>/` 布局，等平台扫描。 |
 | Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布。 |
 | skillstore.io / Skill Vault | ⏳ 可选 | 第三方目录，填仓库地址或上传 SKILL.md。 |
@@ -65,33 +65,33 @@ python skills/workbuddy-conversation-manager/scripts/build_pkg.py
 ## 提交材料
 
 - **标识名**：`workbuddy-conversation-manager`（小写字母、数字、连字符）
-- **中文名**：`WorkBuddy会话管理`
-- **英文名**：`WorkBuddy Conversation Manager`
-- **版本**：1.4.1
+- **中文名**：`WorkBuddy任务管理`
+- **英文名**：`WorkBuddy Task Manager`
+- **版本**：1.4.2
 - **SkillHub 分类**：`dev-programming`（开发编程）
 - **许可证**：MIT
 - **头像**：`assets/icon-512.png`（512×512，约 243 KB，≤500 KB；Qoder 同构布局：左下 WorkBuddy 图标、右上紫色文档、右下紫色铅笔）
 
 **中文简介**
 
-> 管理 WorkBuddy 本地会话：体检、筛选、按完整历史两步式重命名、任务/空间迁移（含记忆与产出）、备份回滚；默认干跑并按对象备份。
+> 管理 WorkBuddy 本地任务：体检、筛选、按完整历史两步式重命名、任务/分组迁移（含记忆与产出）、备份回滚；默认干跑并按对象备份。
 
 **英文简介**
 
-> Manage local WorkBuddy sessions — doctor, list/filter, two-step rename from full transcripts, move between tasks/spaces with memory and outputs, backup & rollback, with dry-run default and per-object backups.
+> Manage local WorkBuddy tasks — doctor, list/filter, two-step rename from full transcripts, move between tasks/groups with memory and outputs, backup & rollback, with dry-run default and per-object backups.
 
 **适用场景**
 
 - 侧栏标题只反映第一句话，批量重命名
-- 把同一主题的对话归入对应空间（含记忆与产出）
-- 新建空间并迁入种子会话
+- 把同一主题的任务归入对应分组（含记忆与产出）
+- 新建分组并迁入种子任务
 - 改库前体检与回滚
 
 **限制**
 
 - 仅 Windows；Python 3.9+
 - 只操作本机 `~/.workbuddy` 数据
-- 不删除会话、不改对话正文、不重建搜索索引
+- 不删除任务、不改任务正文、不重建搜索索引
 - 默认迁移会搬记忆与产出；只要元数据时用 `--metadata-only`
 
 ## frontmatter 字段
@@ -101,14 +101,14 @@ WorkBuddy/Qoder 市场解析 `SKILL.md` 时会检查以下字段：
 | 字段 | 本仓库取值 |
 |---|---|
 | `name` | `workbuddy-conversation-manager` |
-| `version` | `1.4.1` |
-| `display_name` | `WorkBuddy Conversation Manager` |
-| `display_name_zh` | `WorkBuddy会话管理` |
+| `version` | `1.4.2` |
+| `display_name` | `WorkBuddy Task Manager` |
+| `display_name_zh` | `WorkBuddy任务管理` |
 | `description` | 中文触发描述 |
 | `description_zh` / `description_en` | 双语描述 |
 | `examples_zh` / `examples_en` | 每语言 3 条示例 |
 | `author` | `HuaHua` |
-| `tags` | WorkBuddy / 会话管理 / 重命名 / 迁移 / SQLite |
+| `tags` | WorkBuddy / 任务管理 / 分组 / 重命名 / 迁移 / SQLite |
 | `license` | MIT |
 
 SkillHub CLI 只认另一套驼峰字段，两套并存，互不影响：
@@ -116,7 +116,7 @@ SkillHub CLI 只认另一套驼峰字段，两套并存，互不影响：
 | 字段 | 本仓库取值 |
 |---|---|
 | `slug` | `workbuddy-conversation-manager` |
-| `displayName` | `WorkBuddy会话管理` |
+| `displayName` | `WorkBuddy任务管理` |
 | `summary` | 中文简介，列表页展示 |
 | `iconUrl` | `https://cdn.jsdelivr.net/gh/HuaHua-Technophile/workbuddy-conversation-manager@main/skills/workbuddy-conversation-manager/assets/icon-512.png` |
 | `category` | `dev-programming`（一级分类 key） |
@@ -148,7 +148,7 @@ git push origin vX.Y.Z     # GitHub Release 与 SkillHub 自动开始
 补发历史版本：
 
 ```bash
-gh workflow run Release --repo HuaHua-Technophile/workbuddy-conversation-manager -f tag=v1.4.1
+gh workflow run Release --repo HuaHua-Technophile/workbuddy-conversation-manager -f tag=v1.4.2
 ```
 
 ### SkillHub CLI（本机手动/CI 共用）
@@ -178,7 +178,7 @@ cp -r skills/workbuddy-conversation-manager /tmp/pub/
 rm -rf /tmp/pub/workbuddy-conversation-manager/assets
 python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbuddy-conversation-manager \
   --host https://api.skillhub.cn \
-  --changelog "v1.4.1：重做 WorkBuddy 图标，补齐 SkillHub 元数据与分类" \
+  --changelog "v1.4.2：统一任务/分组术语，重做 WorkBuddy 图标，补齐 SkillHub 元数据与分类" \
   --dry-run
 ```
 
@@ -192,7 +192,7 @@ python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbudd
 
 发布后在 <https://skillhub.cn/dashboard> 查看「安全审核中」；审核通过后详情页才完整可见。
 
-本机实测（2026-11-15）：v1.4.1 → `skillId=322039`；发布后约 1 分钟查询，`skill.iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`；审核前 `latestVersion` 仍返回 1.4.0，`tags.latest` 已是 1.4.1。
+本机实测（2026-11-15）：v1.4.1 → `skillId=322039`；v1.4.2 继续复用同一 skillId。发布后约 1 分钟查询，`skill.iconUrl` 已切到仓库 jsdelivr，`category=dev-programming`；审核前 `latestVersion` 仍返回旧版本，`tags.latest` 已是新版本。
 
 ### CI 的两个坑
 

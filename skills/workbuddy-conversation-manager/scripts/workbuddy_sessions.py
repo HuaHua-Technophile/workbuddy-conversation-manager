@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""WorkBuddy 会话管理（仅标准库）：体检、列表、两步式重命名、迁移、备份与回滚。
+"""WorkBuddy 任务管理（仅标准库）：体检、列表、两步式重命名、迁移、备份与回滚。
 
 重命名：rename --export 导出完整历史与 LPT 分片 → agent 产出 titles.json →
 rename --import 默认干跑，加 --apply 落盘。默认标题长度 20–30 字，可放宽到 10–30。
 
-迁移：默认同时迁移记忆与产出，并同步必要的会话 JSONL/子目录；
+迁移：默认同时迁移记忆与产出，并同步必要的任务 JSONL/子目录；
 只要元数据时加 --metadata-only。
 
 核心事实：
-- 侧栏的「任务 / 空间」由 sessions.is_playground 决定：1=任务，0=空间。
-- 空间归属由 sessions.cwd 决定，cwd 必须与已有空间完全一致（宽松匹配、严格写入）。
-- 对话正文在 <home>/projects/<encoded-cwd>/<session-id>.jsonl，附件/子代理在同名目录。
+- 侧栏的「任务 / 分组」由 sessions.is_playground 决定：1=任务，0=分组。
+- 分组归属由 sessions.cwd 决定，cwd 必须与已有分组完全一致（宽松匹配、严格写入）。
+- 任务正文在 <home>/projects/<encoded-cwd>/<session-id>.jsonl，附件/子代理在同名目录。
 - 侧栏缓存是 <home>/<user-id>/sidebar-list-snapshot.json；数据库才是权威。
 - 有效标题以 JSONL 最后一条 custom-title 事件为准；数据库 title/custom_title 与快照 title 同步写。
 - 记忆在 <workspace>/.workbuddy/memory/YYYY-MM-DD.md，变更范围从 changes-index 的 hunk 反推。
@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 
@@ -233,7 +233,7 @@ class WorkBuddy:
     def resolve_space(self, query: str) -> str:
         spaced = self.spaces()
         if not spaced:
-            raise UserError("数据库里没有任何空间（is_playground=0 且未删除的会话）。")
+            raise UserError("数据库里没有任何分组（is_playground=0 且未删除的任务）。")
         raw_q = str(query).strip()
         nq = norm_cwd(raw_q).lower()
         exact = [s for s in spaced if norm_cwd(s["cwd"]).lower() == nq]
@@ -252,13 +252,13 @@ class WorkBuddy:
                 f"  - {s['cwd']} ({s['n']} 条, 最近 {format_ms(s['last'])})"
                 for s in candidates
             )
-            raise UserError(f"目标空间不唯一，请用完整路径指定：\n{lines}")
+            raise UserError(f"目标分组不唯一，请用完整路径指定：\n{lines}")
         lines = "\n".join(
             f"  - {s['cwd']} ({s['n']} 条, 最近 {format_ms(s['last'])})"
             for s in spaced[:20]
         )
         raise UserError(
-            f"找不到已有空间：{raw_q}\n只允许迁移到已有空间。可用空间：\n{lines}"
+            f"找不到已有分组：{raw_q}\n只允许迁移到已有分组。可用分组：\n{lines}"
         )
 
     @staticmethod
@@ -283,11 +283,11 @@ class WorkBuddy:
         found = list((self.home / "projects").glob(f"*/{sid}.jsonl"))
         if not found:
             raise UserError(
-                f"找不到会话文件 projects/*/{sid}.jsonl；可能已被移动或删除。"
+                f"找不到任务文件 projects/*/{sid}.jsonl；可能已被移动或删除。"
             )
         if len(found) > 1:
             lines = "\n".join(f"  - {p}" for p in found)
-            raise UserError(f"发现多个同名会话文件，请人工确认：\n{lines}")
+            raise UserError(f"发现多个同名任务文件，请人工确认：\n{lines}")
         return found[0].parent
 
     def snapshots(self):
@@ -637,7 +637,7 @@ class Mover:
             if norm_cwd(old_cwd_raw) == norm_cwd(target_cwd):
                 return {
                     "session_id": sid, "title": title, "status": "skipped",
-                    "reason": "已经在目标空间", "old_cwd": old_cwd_raw,
+                    "reason": "已经在目标分组", "old_cwd": old_cwd_raw,
                     "target_cwd": target_cwd,
                 }
             new_cwd = target_cwd
@@ -722,7 +722,7 @@ class Mover:
                     src_file = mem["file"]
                     date = src_file.stem
                     target_file = Path(new_cwd) / ".workbuddy" / "memory" / src_file.name
-                    marker = f"## 迁移自 {old_cwd_raw}（会话 {sid}）"
+                    marker = f"## 迁移自 {old_cwd_raw}（任务 {sid}）"
                     src_backup = self.backup.copy_file(
                         src_file, item_dir / "memory" / date / "source.md"
                     )
@@ -903,7 +903,7 @@ def print_spaces(wb: WorkBuddy, as_json=False):
         print(json.dumps({"user_id": wb.user_id, "spaces": spaces}, ensure_ascii=False, indent=2))
         return
     print(f"用户: {wb.user_id or '-'}")
-    print(f"{'空间路径':<60} {'会话数':>6}  最近活跃")
+    print(f"{'分组路径':<60} {'任务数':>6}  最近活跃")
     print("-" * 88)
     for s in spaces:
         print(f"{s['cwd']:<60} {s['n']:>6}  {format_ms(s['last'])}")
@@ -913,7 +913,7 @@ def print_sessions(rows, as_json=False):
     if as_json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
         return
-    print(f"{'ID':<38} {'任务?':<5} {'空间':<28} {'最近活跃':<18} 标题")
+    print(f"{'ID':<38} {'任务?':<5} {'分组':<28} {'最近活跃':<18} 标题")
     print("-" * 130)
     for r in rows:
         print(
@@ -928,7 +928,7 @@ def select_sessions(wb: WorkBuddy, queries: list[str]):
     for q in queries:
         hits = wb.find_sessions(q)
         if not hits:
-            raise UserError(f"找不到会话：{q}")
+            raise UserError(f"找不到任务：{q}")
         if len(hits) > 1:
             print_sessions(hits)
             raise UserError(
@@ -982,7 +982,7 @@ def select_by_ids(wb: WorkBuddy, ids_text: str):
         else:
             out.append(hits[0])
     if errors:
-        raise UserError("无法唯一确定会话：" + "、".join(errors))
+        raise UserError("无法唯一确定任务：" + "、".join(errors))
     seen, unique = set(), []
     for s in out:
         if s["id"] in seen:
@@ -1008,19 +1008,19 @@ def resolve_target_space(wb: WorkBuddy, value: str, create: bool, allow_missing:
     try:
         return wb.resolve_space(value)
     except UserError as exc:
-        if not create or "找不到已有空间" not in str(exc):
+        if not create or "找不到已有分组" not in str(exc):
             raise
         path = normalize_space_path(value)
         target = Path(path)
         if target.exists():
             if not target.is_dir():
                 raise UserError(f"目标路径不是目录：{path}")
-            print(f"[INFO] 使用已有目录创建空间：{path}（首个迁入会话作为种子）")
+            print(f"[INFO] 使用已有目录创建分组：{path}（首个迁入任务作为种子）")
             return path
         if not allow_missing:
-            raise UserError(f"目录不存在：{path}。确认在该路径创建空间请加 --allow-missing。")
+            raise UserError(f"目录不存在：{path}。确认在该路径创建分组请加 --allow-missing。")
         target.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] 新建目录并创建空间：{path}（首个迁入会话作为种子）")
+        print(f"[INFO] 新建目录并创建分组：{path}（首个迁入任务作为种子）")
         return path
 
 
@@ -1031,19 +1031,19 @@ def cmd_move(args):
             print("错误：WorkBuddy 正在运行，--require-closed 要求先退出应用。", file=sys.stderr)
             return 3
         if args.running_check and app_running():
-            print("提示：检测到 WorkBuddy 正在运行。按配置允许热写；若侧栏未刷新，请切换空间或重启应用。")
+            print("提示：检测到 WorkBuddy 正在运行。按配置允许热写；若侧栏未刷新，请切换分组或重启应用。")
         sessions = select_sessions(wb, args.session)
         create = bool(getattr(args, "create_space", False))
         allow_missing = bool(getattr(args, "allow_missing", False))
         if args.mode == "space":
             if not args.to:
-                raise UserError("迁移到空间时必须提供 --to。")
+                raise UserError("迁移到分组时必须提供 --to。")
             if len(args.to) == 1:
                 targets = [resolve_target_space(wb, args.to[0], create, allow_missing)] * len(sessions)
             elif len(args.to) == len(sessions):
                 targets = [resolve_target_space(wb, t, create, allow_missing) for t in args.to]
             else:
-                raise UserError("--to 的数量必须是 1，或与会话数量一致。")
+                raise UserError("--to 的数量必须是 1，或与任务数量一致。")
         else:
             targets = [None] * len(sessions)
         backup = Backup(wb, Path(args.backup_dir) if args.backup_dir else None)
@@ -1139,7 +1139,7 @@ def cmd_find(args):
         else:
             rows = wb.all_sessions()[: args.limit]
         if not rows:
-            raise UserError(f"找不到会话：{args.query}")
+            raise UserError(f"找不到任务：{args.query}")
         print_sessions(rows, args.json)
         return 0
     finally:
@@ -1151,7 +1151,7 @@ def cmd_show(args):
     try:
         row = wb.session(args.session_id)
         if not row:
-            raise UserError(f"找不到会话：{args.session_id}")
+            raise UserError(f"找不到任务：{args.session_id}")
         if args.json:
             print(json.dumps(row, ensure_ascii=False, indent=2))
         else:
@@ -1221,9 +1221,9 @@ def cmd_doctor(args):
         sessions = wb.all_sessions()
         missing_jsonl = [s for s in sessions if not find_jsonl(home, s["id"])]
         add(
-            "会话文件",
+            "任务文件",
             "warn" if missing_jsonl else "ok",
-            f"{len(sessions)} 条会话，{len(missing_jsonl)} 条缺 JSONL",
+            f"{len(sessions)} 条任务，{len(missing_jsonl)} 条缺 JSONL",
         )
         dir_mismatch = []
         for s in sessions:
@@ -1248,7 +1248,7 @@ def cmd_doctor(args):
         add(
             "空项目目录",
             "warn" if orphan_dirs else "ok",
-            f"{len(orphan_dirs)} 个无会话目录"
+            f"{len(orphan_dirs)} 个无任务目录"
             + (f"：{', '.join(d.name for d in orphan_dirs[:3])}" if orphan_dirs else ""),
         )
         snaps = wb.snapshots()
@@ -1333,7 +1333,7 @@ def cmd_backup(args):
         if args.json:
             print(json.dumps(rows, ensure_ascii=False, indent=2))
         else:
-            print(f"{'备份':<24} {'大小':>9}  会话")
+            print(f"{'备份':<24} {'大小':>9}  任务")
             print("-" * 60)
             for r in rows:
                 print(f"{r['name']:<24} {r['size'] / 1024:>7.1f}KB  {r['sessions'] if r['sessions'] is not None else '-'}")
@@ -1374,7 +1374,7 @@ def cmd_backup(args):
         for old in dirs[:-keep]:
             shutil.rmtree(old)
             removed.append(old.name)
-    print(f"[OK] 整库备份：{dest}（{sessions} 条会话，{users} 个账号）")
+    print(f"[OK] 整库备份：{dest}（{sessions} 条任务，{users} 个账号）")
     if removed:
         print(f"     已清理旧备份 {len(removed)} 份：{', '.join(removed)}")
     if args.json:
@@ -1676,7 +1676,7 @@ def cmd_list(args):
         print("-" * 110)
         for it in items:
             size = f"{it['bytes']/1024:.0f}KB" if it["bytes"] is not None else "缺失"
-            area = "任务" if it["is_playground"] else "空间"
+            area = "任务" if it["is_playground"] else "分组"
             print(
                 f"{it['session_id']:<38} {it['user_id'][:8]:<9} {area:<3} {size:>9}  "
                 f"{it['title'][:48]}"
@@ -1697,7 +1697,7 @@ def cmd_extract(args):
             elif getattr(args, "session", None):
                 sessions = select_sessions(wb, args.session)
             else:
-                raise UserError("请用 --session 指定会话，或使用 --all。")
+                raise UserError("请用 --session 指定任务，或使用 --all。")
         out = Path(args.out).expanduser().resolve()
         out.mkdir(parents=True, exist_ok=True)
         manifest = []
@@ -1730,7 +1730,7 @@ def cmd_extract(args):
                     f"# Title: {entry['title']}",
                     f"# CWD: {s['cwd']}",
                     f"# User: {s['user_id']}",
-                    f"# Area: {'任务' if entry['is_playground'] else '空间'}",
+                    f"# Area: {'任务' if entry['is_playground'] else '分组'}",
                     f"# Size: {entry['bytes']} bytes",
                     "# Note: 仅 user/assistant 正文，已去除 system-reminder 与工具调用",
                     "",
@@ -1837,7 +1837,7 @@ def cmd_apply_titles(args):
         for sid, title in by_id.items():
             row = wb.session(sid)
             if not row or row.get("deleted_at"):
-                results.append({"session_id": sid, "status": "failed", "error": "会话不存在或已删除"})
+                results.append({"session_id": sid, "status": "failed", "error": "任务不存在或已删除"})
                 continue
             jsonl = find_jsonl(wb.home, sid)
             if not jsonl:
@@ -1945,7 +1945,7 @@ def cmd_rename(args):
             if args.limit:
                 sessions = sessions[: args.limit]
             if not sessions:
-                raise UserError("没有匹配的会话。")
+                raise UserError("没有匹配的任务。")
         finally:
             wb.close()
         args._sessions = sessions
@@ -1960,23 +1960,23 @@ def cmd_rename(args):
 def build_parser():
     p = argparse.ArgumentParser(
         prog="workbuddy_sessions.py",
-        description="WorkBuddy 会话管理：体检、列表、两步式重命名、迁移、备份与回滚",
+        description="WorkBuddy 任务管理：体检、列表、两步式重命名、迁移、备份与回滚",
     )
     p.add_argument("--version", action="version", version=f"workbuddy-conversation-manager {VERSION}")
     p.add_argument("--workbuddy-home", default=str(DEFAULT_HOME), help="WorkBuddy 数据目录")
-    p.add_argument("--user-id", default=None, help="只处理指定用户；默认取会话最多的用户")
+    p.add_argument("--user-id", default=None, help="只处理指定用户；默认取任务最多的用户")
     sub = p.add_subparsers(dest="command", required=True)
 
-    sp = sub.add_parser("spaces", help="列出已有空间")
+    sp = sub.add_parser("spaces", help="列出已有分组")
     sp.add_argument("--json", action="store_true")
 
-    sf = sub.add_parser("find", help="按 ID/标题/关键词查会话")
+    sf = sub.add_parser("find", help="按 ID/标题/关键词查任务")
     sf.add_argument("query", nargs="?")
     sf.add_argument("--limit", type=int, default=30)
     sf.add_argument("--json", action="store_true")
     sf.set_defaults(func=cmd_find)
 
-    ss = sub.add_parser("show", help="显示单条会话详情")
+    ss = sub.add_parser("show", help="显示单条任务详情")
     ss.add_argument("session_id")
     ss.add_argument("--json", action="store_true")
     ss.set_defaults(func=cmd_show)
@@ -1993,7 +1993,7 @@ def build_parser():
     sb.add_argument("--json", action="store_true")
     sb.set_defaults(func=cmd_backup)
 
-    sl = sub.add_parser("list", help="列出会话（支持多账号）")
+    sl = sub.add_parser("list", help="列出任务（支持多账号）")
     sl.add_argument("--all-users", action="store_true")
     sl.add_argument("--keyword", default=None, help="标题关键词")
     sl.add_argument("--cwd", default=None, help="cwd 包含匹配")
@@ -2014,12 +2014,12 @@ def build_parser():
     se.set_defaults(func=cmd_extract)
 
     sr = sub.add_parser("rename", help="两步式重命名：--export 导出/分片，--import 写回（默认干跑）")
-    sr.add_argument("--export", action="store_true", help="导出完整对话历史与 LPT 分片")
+    sr.add_argument("--export", action="store_true", help="导出完整任务历史与 LPT 分片")
     sr.add_argument("--import", dest="import_file", metavar="FILE", help="导入 titles.json")
     sr.add_argument("--apply-flag", "--apply", dest="apply", action="store_true", help="真正写库")
     sr.add_argument("--out", help="--export 的输出目录")
     sr.add_argument("--shards", type=int, default=0, help="--export 时按字数切成 N 组")
-    sr.add_argument("--ids", help="逗号分隔的会话 ID 前缀")
+    sr.add_argument("--ids", help="逗号分隔的任务 ID 前缀")
     sr.add_argument("--all-users", action="store_true")
     sr.add_argument("--keyword", default=None)
     sr.add_argument("--cwd", default=None)
@@ -2047,13 +2047,13 @@ def build_parser():
     st.add_argument("--json", action="store_true")
     st.set_defaults(func=cmd_apply_titles, require_prefix=True, apply=False, dry_run=False)
 
-    mv = sub.add_parser("move", help="迁移会话")
-    mv.add_argument("--session", action="append", required=True, help="会话 ID、标题或关键词；可重复")
-    mv.add_argument("--to", action="append", default=[], help="目标空间路径/名称；可重复")
+    mv = sub.add_parser("move", help="迁移任务")
+    mv.add_argument("--session", action="append", required=True, help="任务 ID、标题或关键词；可重复")
+    mv.add_argument("--to", action="append", default=[], help="目标分组路径/名称；可重复")
     mv.add_argument("--mode", choices=["space", "task"], default="space")
     mv.add_argument("--backup-dir", default=None)
     mv.add_argument("--create-space", action="store_true",
-                    help="目标空间不存在时按绝对路径创建，首个迁入会话作为种子")
+                    help="目标分组不存在时按绝对路径创建，首个迁入任务作为种子")
     mv.add_argument("--allow-missing", action="store_true",
                     help="配合 --create-space，目录不存在时允许创建")
     mv.add_argument("--keep-orphans", action="store_true",
@@ -2062,7 +2062,7 @@ def build_parser():
     asset_group.add_argument("--with-assets", dest="with_assets", action="store_true",
                              help="迁移记忆与产出（默认）")
     asset_group.add_argument("--metadata-only", dest="with_assets", action="store_false",
-                             help="只改元数据并同步会话文件，不搬记忆与产出")
+                             help="只改元数据并同步任务文件，不搬记忆与产出")
     mv.add_argument("--no-artifacts", action="store_true", help="迁移记忆但跳过产出")
     mv.add_argument("--no-running-check", dest="running_check", action="store_false", help="不检测 WorkBuddy 是否运行")
     mv.add_argument("--require-closed", action="store_true", help="WorkBuddy 运行时拒绝写入并返回退出码 3")

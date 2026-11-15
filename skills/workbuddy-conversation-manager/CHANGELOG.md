@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.2 — 2026-11-15
+
+全项目术语统一为「任务」和「分组」：覆盖 README、SKILL.md、CHANGELOG、PUBLISHING、references、examples 与 CLI 帮助/输出。
+
+- 命令、参数与数据库字段保持不变：`sessions`、`session_id`、`--session`、`spaces`、`--create-space`、`space.name`。
+- 展示名统一为 `WorkBuddy任务管理` / `WorkBuddy Task Manager`；`slug` 与 `name` 仍为 `workbuddy-conversation-manager`。
+- 版本对齐到 1.4.2：GitHub Release、SkillHub 与 WorkBuddy `-dir` 包使用同一版本号。
+
 ## 1.4.1 — 2026-11-15
 
 - 图标重做为 Qoder 同构布局：左下角 WorkBuddy 图标，右上紫色文档位与右下铅笔徽标保持原位；提供 256/512/1024 与 JPG 版本。
@@ -11,9 +19,9 @@
 
 ## 1.4.0 — 2026-11-15
 
-- 产出识别新增 JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`，与 `artifact-index`、`changes-index` 三路合并；本机实测在 28 条会话中发现 104 个 cwd 内非记忆路径。
+- 产出识别新增 JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`，与 `artifact-index`、`changes-index` 三路合并；本机实测在 28 条任务中发现 104 个 cwd 内非记忆路径。
 - 正文解析固定在搬走 JSONL 之前，避免搬完再解析导致空结果。
-- frontmatter 增加 `examples_zh` / `examples_en` / `author`；头像改为官方 WorkBuddy 图标 + 会话徽标组合，提供 256/512/1024 多尺寸。
+- frontmatter 增加 `examples_zh` / `examples_en` / `author`；头像改为官方 WorkBuddy 图标 + 任务徽标组合，提供 256/512/1024 多尺寸。
 - 仓库重构为 `skills/<name>/` + 根 `install.py`，便于 skills.sh 等目录索引；宿主仍安装为扁平技能目录。
 - `PUBLISHING.md` 更正 skills.sh 状态为未收录/待复核，补充 WorkBuddy/Qoder 市场提交材料。
 - 2026-11-15 已通过 GitHub 导入发布到 SkillHub（v1.4.0，安全审核中）；WorkBuddy 开放平台首次提交被收回，当日提审配额已满，次日重新提交。
@@ -23,17 +31,17 @@
 - `move` 搬完后自动删除已无 `*.jsonl` 的源项目目录；`--keep-orphans` 可保留，删除清单写入 `batch.json` 的 `removed_dirs`。
 - `doctor` 新增「项目目录一致性」与「空项目目录」检查，默认体检从 8 项扩到 10 项。
 - `--create-space` 改为目录必须已存在，确认新建目录时需加 `--allow-missing`。
-- 本机实测：清理 3 个空源目录，`projects/` 从 93 个目录收敛到 90 个；70 条会话目录一致性 0 异常。
-- 近期迁移实测：9 条会话调整归属，3 个记忆文件与 85 条产出登记（33 条实际移动、26 条已存在、26 条源文件缺失）。
+- 本机实测：清理 3 个空源目录，`projects/` 从 93 个目录收敛到 90 个；70 条任务目录一致性 0 异常。
+- 近期迁移实测：9 条任务调整归属，3 个记忆文件与 85 条产出登记（33 条实际移动、26 条已存在、26 条源文件缺失）。
 
 ## 1.2.0 — 2026-11-15
 
-- `move --create-space`：目标空间不存在时按绝对路径创建目录，首个迁入会话作为空间种子。
-- 文档补充 WorkBuddy 空间由 `cwd` 派生的说明。
+- `move --create-space`：目标分组不存在时按绝对路径创建目录，首个迁入任务作为分组种子。
+- 文档补充 WorkBuddy 分组由 `cwd` 派生的说明。
 
 ## 1.1.0 — 2026-11-15
 
-- `move` 默认恢复为同时迁移记忆与产出，并同步会话文件；新增 `--metadata-only` 只改元数据。
+- `move` 默认恢复为同时迁移记忆与产出，并同步任务文件；新增 `--metadata-only` 只改元数据。
 - 迁移 manifest 的 `metadata_only` 默认改为 `false`；`--no-artifacts` 仍可在搬记忆时跳过产出。
 - 文档与发布物同步更新到 1.1.0。
 
@@ -43,12 +51,12 @@
 
 ### 新增
 
-- `doctor`：8 项体检（数据库、WAL、表结构、进程、会话文件、快照、标题一致性、备份）。
+- `doctor`：8 项体检（数据库、WAL、表结构、进程、任务文件、快照、标题一致性、备份）。
 - `list`：关键词、cwd、时间、区域、账号筛选。
 - `rename --export` / `rename --import`：两步式重命名，默认干跑，`--apply` 落盘。
-- `rename --export --shards N`：按字数 LPT 自动分片，单条超大对话独占一组。
+- `rename --export --shards N`：按字数 LPT 自动分片，单条超大任务独占一组。
 - `backup`：整库快照，默认保留最近 10 份，目录自动去重。
-- `move --with-assets`：可选迁移记忆与产出；默认只改元数据并同步会话文件。
+- `move --with-assets`：可选迁移记忆与产出；默认只改元数据并同步任务文件。
 
 ### 变更
 
@@ -61,7 +69,7 @@
 - `category` 字段可自动补 `[分类] ` 前缀。
 - 备份与文本写入改为原子写入 + 目录去重。
 - 修正 Windows 路径编码：`X:/赞大拇指` → `x-赞大拇指`（避免双横线）。
-- `--ids` 和 `find` 支持会话 ID 前缀。
+- `--ids` 和 `find` 支持任务 ID 前缀。
 
 ### 兼容
 
@@ -70,5 +78,5 @@
 
 ## 0.9.0 — 内部迭代
 
-- 批量读取、子智能体分片、三层标题写入、70 条对话重命名实测。
+- 批量读取、子智能体分片、三层标题写入、70 条任务重命名实测。
 - 支持多账号、侧栏快照、`custom-title` 事件。
