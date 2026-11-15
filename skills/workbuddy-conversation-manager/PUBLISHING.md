@@ -6,17 +6,20 @@
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| GitHub | ✅ 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager) · [v1.4.0 Release](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager/releases/tag/v1.4.0)，MIT，含 `-root` / `-dir` 两个安装包 |
-| skills.sh（Vercel Labs 目录） | ⚠️ 未收录/待复核 | 2026-11-15 复核页面为 404。该站没有手动提交入口，按 `npx skills add` 安装量索引；仓库已改为 `skills/<name>/` 布局，需重新检查索引状态。`skills list -g` 显示 tracked 不等于 skills.sh 已收录。 |
-| WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满，2026-11-16 重新提交 `-dir` 包。技能 ID `os_d12a959583509f94`。 |
-| SkillHub（腾讯） | 🕒 审核中 | 2026-11-15 通过 GitHub 导入发布，slug `workbuddy-conversation-manager`，版本 1.4.0，安全审核中。 |
-| Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布，机审。使用 `-dir` 包。 |
+| GitHub | ✅ v1.4.0 已发布；v1.4.1 准备发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-conversation-manager)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。 |
+| SkillHub（腾讯） | 🕒 v1.4.0 审核中；v1.4.1 待发布 | 本机 CLI 已登录；slug `workbuddy-conversation-manager`。v1.4.1 使用仓库 jsdelivr 图标，分类 `dev-programming`。 |
+| WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.4.1 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
+| skills.sh（Vercel Labs 目录） | ⚠️ 未收录 | 无手动提交入口，按 `npx skills add` 安装量索引；已改为 `skills/<name>/` 布局，等平台扫描。 |
+| Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布。 |
 | skillstore.io / Skill Vault | ⏳ 可选 | 第三方目录，填仓库地址或上传 SKILL.md。 |
 
 ## 仓库结构
 
 ```
 workbuddy-conversation-manager/
+├── .github/
+│   └── workflows/
+│       └── release.yml                # tag 自动构建 + GitHub Release + SkillHub
 ├── install.py
 ├── README.md
 ├── LICENSE
@@ -30,7 +33,9 @@ workbuddy-conversation-manager/
         ├── assets/
         │   ├── icon-1024.png
         │   ├── icon-512.png
-        │   └── icon-512.jpg
+        │   ├── icon-512.jpg
+        │   ├── icon-256.png
+        │   └── icon-256.jpg
         ├── scripts/
         ├── references/
         └── examples/
@@ -52,18 +57,20 @@ python skills/workbuddy-conversation-manager/scripts/build_pkg.py
 
 生成：
 
-- `dist/workbuddy-conversation-manager-root-1.4.0.zip`：根目录直接含 `SKILL.md`
-- `dist/workbuddy-conversation-manager-dir-1.4.0.zip`：单层目录 `workbuddy-conversation-manager/`
+- `dist/workbuddy-conversation-manager-root-<版本>.zip`：根目录直接含 `SKILL.md`
+- `dist/workbuddy-conversation-manager-dir-<版本>.zip`：单层目录 `workbuddy-conversation-manager/`
+
+两个包内容一致，只差一层目录。WorkBuddy 与 Qoder 使用 `-dir` 包。
 
 ## 提交材料
 
 - **标识名**：`workbuddy-conversation-manager`（小写字母、数字、连字符）
 - **中文名**：`WorkBuddy会话管理`
 - **英文名**：`WorkBuddy Conversation Manager`
-- **版本**：1.4.0
-- **分类**：开发工具 / 效率工具 / 数据管理
+- **版本**：1.4.1
+- **SkillHub 分类**：`dev-programming`（开发编程）
 - **许可证**：MIT
-- **头像**：`skills/workbuddy-conversation-manager/assets/icon-512.png`（512×512，105 KB，≤500 KB；官方 WorkBuddy 图标 + 会话徽标）
+- **头像**：`assets/icon-512.png`（512×512，约 243 KB，≤500 KB；Qoder 同构布局：左下 WorkBuddy 图标、右上紫色文档、右下紫色铅笔）
 
 **中文简介**
 
@@ -94,7 +101,7 @@ WorkBuddy/Qoder 市场解析 `SKILL.md` 时会检查以下字段：
 | 字段 | 本仓库取值 |
 |---|---|
 | `name` | `workbuddy-conversation-manager` |
-| `version` | `1.4.0` |
+| `version` | `1.4.1` |
 | `display_name` | `WorkBuddy Conversation Manager` |
 | `display_name_zh` | `WorkBuddy会话管理` |
 | `description` | 中文触发描述 |
@@ -104,28 +111,111 @@ WorkBuddy/Qoder 市场解析 `SKILL.md` 时会检查以下字段：
 | `tags` | WorkBuddy / 会话管理 / 重命名 / 迁移 / SQLite |
 | `license` | MIT |
 
-## 渠道一：WorkBuddy 开放平台
+SkillHub CLI 只认另一套驼峰字段，两套并存，互不影响：
+
+| 字段 | 本仓库取值 |
+|---|---|
+| `slug` | `workbuddy-conversation-manager` |
+| `displayName` | `WorkBuddy会话管理` |
+| `summary` | 中文简介，列表页展示 |
+| `iconUrl` | `https://cdn.jsdelivr.net/gh/HuaHua-Technophile/workbuddy-conversation-manager@main/skills/workbuddy-conversation-manager/assets/icon-512.png` |
+| `category` | `dev-programming`（一级分类 key） |
+| `homepage` | GitHub 仓库地址 |
+
+## 渠道一：GitHub + SkillHub 自动发布
+
+### GitHub Actions
+
+`.github/workflows/release.yml` 在 push tag `v*` 时：
+
+1. 校验 tag 与 `SKILL.md`、`workbuddy_sessions.py`、`build_pkg.py` 三处版本号一致。
+2. 运行 `python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py --version` 做脚本可导入检查。
+3. 构建 `-root` / `-dir` 两个 zip。
+4. 创建 GitHub Release 并上传 zip。
+5. 同一 workflow 的 `skillhub` job 登录 SkillHub CLI 并发布（需要仓库 secret `SKILLHUB_KEY`）。
+
+标准流程：
+
+```bash
+# 1) 同步三处版本号：SKILL.md / scripts/workbuddy_sessions.py / scripts/build_pkg.py
+# 2) 写 CHANGELOG
+git add -A && git commit -m "feat(vX.Y.Z): ..."
+git push
+git tag -a vX.Y.Z -m "vX.Y.Z — 摘要"
+git push origin vX.Y.Z     # GitHub Release 与 SkillHub 自动开始
+```
+
+补发历史版本：
+
+```bash
+gh workflow run Release --repo HuaHua-Technophile/workbuddy-conversation-manager -f tag=v1.4.1
+```
+
+### SkillHub CLI（本机手动/CI 共用）
+
+本机 CLI 是纯 Python 单文件，Windows 的 Git Bash 可直接跑，不需要 WSL：
+
+```bash
+python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" auth whoami
+```
+
+首次登录：
+
+```bash
+python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" login --key skh_xxx --host https://api.skillhub.cn
+python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" auth whoami
+```
+
+- Token 在 <https://skillhub.cn/dashboard/keys> 创建，只显示一次。
+- 本机 `~/.skillhub/config.json` / 凭证文件是**明文**，不要提交到仓库。
+- GitHub Actions 用仓库 secret `SKILLHUB_KEY`；secret 由 GitHub 加密保存，创建后不可回读，fork PR 拿不到。
+
+发布前先 dry-run：
+
+```bash
+rm -rf /tmp/pub && mkdir -p /tmp/pub
+cp -r skills/workbuddy-conversation-manager /tmp/pub/
+rm -rf /tmp/pub/workbuddy-conversation-manager/assets
+python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbuddy-conversation-manager \
+  --host https://api.skillhub.cn \
+  --changelog "v1.4.1：重做 WorkBuddy 图标，补齐 SkillHub 元数据与分类" \
+  --dry-run
+```
+
+正式发布去掉 `--dry-run`。关键规则：
+
+- **必须剔除 `assets/`**：CLI 会把技能目录下所有文件打包上传，平台拒绝 `png` 等二进制文件（`400 不允许的文件类型`）。本地安装目录不含 assets，所以本地发布不会暴露这个问题，CI 会。
+- **同 slug 发布 = 新版本**，但版本号必须递增；同版本会报 `版本 x.y.z 已存在`。
+- **图标异步生效**：publish 成功后 `skill.iconUrl` 可能还是旧值，约 30–60 秒后更新；`iconUrl` 可用仓库 jsdelivr，不依赖平台托管。
+- **分类用 `category`**（一级 key，如 `dev-programming`），不是 `categoryIds`；`categoryIds` 是团队版字段，普通 Skill 会被静默忽略。
+- 连续发布会触发 `429 请求过于频繁`，等约 50 秒再试。
+
+发布后在 <https://skillhub.cn/dashboard> 查看「安全审核中」；审核通过后详情页才完整可见。
+
+### CI 的两个坑
+
+1. **不能另建由 Release 触发的 workflow**：`GITHUB_TOKEN` 创建的 Release 不会再触发其他 workflow（GitHub 防递归）。SkillHub 发布必须放在同一个 workflow 的第二个 job（`needs: release`）。
+2. **必须先剔除 `assets/`**：见上，CI 第一次跑最容易挂在这里。
+
+> 当前 WorkBuddy 仓库尚未配置 `SKILLHUB_KEY`；配置后 tag 流程才能全绿。配置前可先手动跑上面的 CLI 发布。
+
+## 渠道二：WorkBuddy 开放平台
 
 1. 打开 <https://open.workbuddy.cn>，完成开发者认证。
 2. 左侧「发布管理 → 技能 → 创建」。
-3. 上传 `workbuddy-conversation-manager-dir-1.4.0.zip`。要求：解压后第一层就是技能目录，即 `workbuddy-conversation-manager/SKILL.md`，且只允许两级目录。
+3. 上传 `workbuddy-conversation-manager-dir-<版本>.zip`。要求：解压后第一层就是技能目录，即 `workbuddy-conversation-manager/SKILL.md`，且只允许两级目录。
 4. 平台自动解析 frontmatter；缺字段会拒绝。
 5. 上传头像 `assets/icon-512.png`，补充分类与使用说明。
 6. 提交审核；当日 5 次 / 当月 20 次提审配额。
-7. 2026-11-15 实测：首次提交后状态变为「已收回」，同日配额已用满 5/5，页面提示次日再提交；重新提交前先查「收回原因」。
+7. 已上架后更新版本：列表卡片右侧「更新版本」，传新的 `-dir` 包，技能 ID 与 slug 不变，同样消耗提审额度。
+8. 2026-11-15 实测：首次提交后状态变为「已收回」，同日配额已用满 5/5，页面提示次日再提交；重新提交前先查「收回原因」。
 
-## 渠道二：SkillHub
-
-1. 绑定 GitHub 账号后打开 <https://skillhub.cn/dashboard/publish>，选择「发布 Skill → 从 GitHub 导入」。
-2. 平台会扫描已绑定仓库的 `skills/<name>/` 目录，直接勾选 `workbuddy-conversation-manager`。
-3. 首次发布填 slug、显示名称、版本、变更说明；导入源在 GitHub，后续更新直接刷新仓库即可。
-4. 若 GitHub 导入不可用，再退回「本地上传」，使用 `-dir` 包。
-5. 已发布条目在「我的 Skills」显示安全审核状态，审核通过后同步到技能广场。
+> WorkBuddy 没有 API / CLI / CI，只能控制台手动上传；GitHub 自动化覆盖不到这一渠道。
 
 ## 渠道三：Qoder 技能市场
 
 1. 客户端「扩展 → 技能 → 添加技能」可先本地自用。
-2. 公开市场走「拓展发布」，上传 `workbuddy-conversation-manager-dir-1.4.0.zip`。
+2. 公开市场走「拓展发布」，上传 `workbuddy-conversation-manager-dir-<版本>.zip`。
 3. 参考文档：<https://docs.qoder.com/zh/qoderwork/skill-marketplace-guidelines>
 4. 机审为主，通常几分钟出结果。
 
@@ -149,22 +239,22 @@ pnpm dlx skills add HuaHua-Technophile/workbuddy-conversation-manager -g -y
 
 ## 版本发布流程
 
-```bash
-python skills/workbuddy-conversation-manager/scripts/build_pkg.py
-git add -A
-git commit -m "feat(v1.4.0): ..."
-git tag v1.4.0
-git push && git push --tags
-gh release create v1.4.0 dist/*.zip --title "v1.4.0" --notes "..."
-```
+1. 改三处版本号：`SKILL.md` / `scripts/workbuddy_sessions.py` / `scripts/build_pkg.py`。
+2. 更新 `CHANGELOG.md`，同步 `PUBLISHING.md` 的渠道状态。
+3. 本地 `python skills/workbuddy-conversation-manager/scripts/build_pkg.py`，确认两个 zip 可生成。
+4. `git add -A && git commit -m "feat(vX.Y.Z): ..." && git push`。
+5. 配置 `SKILLHUB_KEY` 后，`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`；Actions 会完成 Release 与 SkillHub。
+6. 到 WorkBuddy 开放平台手动上传 `-dir` 包（额度允许时）。
+7. 需要时手动补 SkillHub 图标/分类或检查审核状态。
 
 发布前检查：
 
-- [ ] `SKILL.md` 的 `version` = 本次发布版本
-- [ ] `scripts/workbuddy_sessions.py` 的 `VERSION` 一致
-- [ ] `scripts/build_pkg.py` 的 `VERSION` 一致
-- [ ] `python install.py --targets all` 后宿主技能可加载
-- [ ] `doctor` 通过
+- [ ] 三处版本号一致：`SKILL.md` / `scripts/workbuddy_sessions.py` / `scripts/build_pkg.py`
+- [ ] `python scripts/workbuddy_sessions.py doctor` 通过
+- [ ] `python scripts/build_pkg.py` 能生成两个 zip
 - [ ] 解压 `-dir` 包确认第一层目录名与 `name` 一致
-- [ ] frontmatter 字段齐全
+- [ ] frontmatter 必填字段齐全（WorkBuddy 下划线族 + SkillHub 驼峰族）
+- [ ] `iconUrl` 地址可达（`curl -I`）
+- [ ] 发布前临时目录已剔除 `assets/`
 - [ ] 头像 512×512 且 ≤500 KB
+- [ ] 打 tag 后看 Actions 是否全绿，再处理 WorkBuddy 手动上传

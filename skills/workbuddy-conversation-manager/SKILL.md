@@ -1,4 +1,10 @@
 ---
+slug: workbuddy-conversation-manager
+displayName: WorkBuddy会话管理
+summary: 管理 WorkBuddy 本地会话与空间：按完整历史两步式重命名、任务/空间迁移（含记忆与产出）、备份回滚、10 项体检。默认干跑并按对象备份。
+iconUrl: https://cdn.jsdelivr.net/gh/HuaHua-Technophile/workbuddy-conversation-manager@main/skills/workbuddy-conversation-manager/assets/icon-512.png
+category: dev-programming
+homepage: https://github.com/HuaHua-Technophile/workbuddy-conversation-manager
 name: workbuddy-conversation-manager
 description: 管理本机 WorkBuddy 的会话：体检、列表筛选、两步式重命名（导出完整历史/导入标题）、迁移任务/空间、整库备份与回滚。用于「重命名 WorkBuddy 对话、给对话改标题、整理会话名称、移动对话、换空间、把对话放到某个空间、列出 WorkBuddy 会话、WorkBuddy 体检、备份 WorkBuddy 数据」等请求；只操作本机 ~/.workbuddy 数据。
 description_zh: 管理 WorkBuddy 本地会话：体检、筛选、两步式重命名、任务/空间迁移、备份回滚；默认干跑，按对象备份。
@@ -15,7 +21,7 @@ examples_en:
   - "Move NAS-related conversations into the NAS space with memory and outputs"
   - "Create a D:/VMs space and move VM conversations into it"
 author: HuaHua
-version: 1.4.0
+version: 1.4.1
 tags: [WorkBuddy, 会话管理, 重命名, 迁移, SQLite]
 license: MIT
 ---

@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.4.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check tag matches VERSION
+        env:
+          TAG_VERSION: ${{ steps.ref.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, re, sys
+          tag = os.environ['TAG_VERSION']
+          root = pathlib.Path('skills/workbuddy-conversation-manager')
+          skill = re.search(r'^version:\s*(\S+)', (root / 'SKILL.md').read_text(), re.M).group(1)
+          pkg = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/build_pkg.py').read_text()).group(1)
+          sessions = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/workbuddy_sessions.py').read_text()).group(1)
+          print(f'tag={tag} SKILL.md={skill} build_pkg={pkg} sessions={sessions}')
+          if not (tag == skill == pkg == sessions):
+              print('::error::版本号不一致：先在 SKILL.md / workbuddy_sessions.py / build_pkg.py 里同步到 ' + tag + ' 再打 tag', file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - name: Doctor (sanity check script imports)
+        run: python skills/workbuddy-conversation-manager/scripts/workbuddy_sessions.py --version
+
+      - name: Build packages
+        run: python skills/workbuddy-conversation-manager/scripts/build_pkg.py
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ref.outputs.tag }}
+          files: dist/*.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  # 放在同一个 workflow 里，而不是另建 release-triggered workflow：
+  # 用 GITHUB_TOKEN 创建的 Release 不会再触发其它 workflow（GitHub 防递归）。
+  skillhub:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SkillHub CLI
+        run: |
+          curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --cli-only
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Login
+        env:
+          SKILLHUB_KEY: ${{ secrets.SKILLHUB_KEY }}
+        run: |
+          if [ -z "$SKILLHUB_KEY" ]; then
+            echo "::error::缺少 SKILLHUB_KEY，请先在仓库 Settings → Secrets 里配置"
+            exit 1
+          fi
+          skillhub login --key "$SKILLHUB_KEY" --host https://api.skillhub.cn
+          skillhub auth whoami
+
+      - name: Publish to SkillHub
+        env:
+          CHANGELOG: ${{ github.event.release.name }}
+        run: |
+          if [ -z "$CHANGELOG" ]; then CHANGELOG="发布 $(git describe --tags --always)"; fi
+          # assets/ 只是仓库与 README 的展示图，不属于技能内容；
+          # SkillHub 不接受 png 等二进制文件，直接打包会被拒。
+          rm -rf /tmp/pub && mkdir -p /tmp/pub
+          cp -r skills/workbuddy-conversation-manager /tmp/pub/
+          rm -rf /tmp/pub/workbuddy-conversation-manager/assets
+          echo "打包内容："
+          find /tmp/pub/workbuddy-conversation-manager -type f | sed 's|/tmp/pub/||' | sort
+          skillhub publish /tmp/pub/workbuddy-conversation-manager \
+            --host https://api.skillhub.cn \
+            --changelog "$CHANGELOG"

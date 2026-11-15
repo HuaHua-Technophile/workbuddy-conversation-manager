@@ -14,7 +14,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # skills/<name>/
 REPO = os.path.dirname(os.path.dirname(ROOT))                        # 仓库根
 NAME = "workbuddy-conversation-manager"
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 FILES = ["SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "PUBLISHING.md"]
 DIRS = ["scripts", "references", "examples"]

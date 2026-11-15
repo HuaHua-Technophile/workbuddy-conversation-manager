@@ -41,7 +41,7 @@ try:
 except Exception:
     pass
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
 

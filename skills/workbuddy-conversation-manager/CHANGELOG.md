@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1 — 2026-11-15
+
+- 图标重做为 Qoder 同构布局：左下角 WorkBuddy 图标，右上紫色文档位与右下铅笔徽标保持原位；提供 256/512/1024 与 JPG 版本。
+- `SKILL.md` frontmatter 补齐 SkillHub 驼峰字段：`slug` / `displayName` / `summary` / `iconUrl` / `category`（`dev-programming`）与 `homepage`，与 WorkBuddy 下划线字段并存。
+- `iconUrl` 改指向仓库自身（jsdelivr），图标随后续提交更新，不再依赖平台托管地址。
+- 新增 `.github/workflows/release.yml`：推送 `v*` tag 时校验三处版本号、构建两个 zip、发布 GitHub Release；同一 workflow 的 `skillhub` job 在配置 `SKILLHUB_KEY` 后自动发布，并在发布前剔除 `assets/`。
+- `PUBLISHING.md` 补充 SkillHub CLI 发布、图标异步生效、`category` 字段、WorkBuddy 手动更新和 CI 两个坑。
+
 ## 1.4.0 — 2026-11-15
 
 - 产出识别新增 JSONL `function_call` 里 `Write` / `Edit` 的 `file_path`，与 `artifact-index`、`changes-index` 三路合并；本机实测在 28 条会话中发现 104 个 cwd 内非记忆路径。
