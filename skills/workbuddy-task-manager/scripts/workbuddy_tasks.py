@@ -3,7 +3,7 @@
 """WorkBuddy 任务管理（仅标准库）：体检、列表、两步式重命名、迁移、备份与回滚。
 
 重命名：rename --export 导出完整历史与 LPT 分片 → agent 产出 titles.json →
-rename --import 默认干跑，加 --apply 落盘。默认标题长度 20–30 字，可放宽到 10–30。
+rename --import 默认干跑，加 --apply 落盘。默认标题长度 20–30 字符，可放宽到 10–30。
 
 迁移：默认同时迁移记忆与产出，并同步必要的任务 JSONL/子目录；
 只要元数据时加 --metadata-only。
@@ -35,23 +35,85 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-try:
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+def _force_utf8(stream):
+    try:
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
-VERSION = "1.5.0"
+
+_force_utf8(sys.stdout)
+_force_utf8(sys.stderr)
+
+VERSION = "1.6.0"
 DEFAULT_HOME = Path(os.environ.get("WORKBUDDY_HOME", str(Path.home() / ".workbuddy")))
 SNAP_GLOB = "*/sidebar-list-snapshot.json"
+
+JSON_MODE = False   # --json：人类可读输出全部静音，整条命令只在最后打一份 JSON
+WARNINGS = []       # JSON_MODE 下的 [WARN]/[NOTE] 收集到这里，随结果一起输出
 
 
 class UserError(Exception):
     pass
 
 
+def out(msg=""):
+    """人类可读输出。JSON_MODE 下静音，保证 stdout 只有一个 JSON 文档。"""
+    if JSON_MODE:
+        return
+    print(msg)
+
+
+def warn(msg, tag="WARN"):
+    """告警。人类可读时直出；JSON_MODE 下只收集，避免污染 stdout。"""
+    WARNINGS.append(str(msg))
+    if not JSON_MODE:
+        print(f"[{tag}] {msg}")
+
+
+def emit_json(payload):
+    """JSON 模式的唯一出口：整份结果只打一次。
+
+    字典结果自行带 warnings 字段；数组结果把告警打到 stderr，
+    以保持「数组」这个形状不变。
+    """
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    if not isinstance(payload, dict):
+        for item in WARNINGS:
+            print(f"[WARN] {item}", file=sys.stderr)
+
+
+def die(msg, code=2):
+    """致命错误。JSON_MODE 下 stdout 也给一份合法 JSON，自动化不会拿到半截输出。"""
+    print(f"[ERROR] {msg}", file=sys.stderr)
+    if JSON_MODE:
+        print(json.dumps({"error": str(msg), "exit": code}, ensure_ascii=False))
+    raise SystemExit(code)
+
+
 def now_stamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def is_deleted(row) -> bool:
+    """WorkBuddy 用 deleted_at=-1 表示未删除，正数是删除时间戳。"""
+    value = row.get("deleted_at") if isinstance(row, dict) else row
+    if value is None:
+        return False
+    try:
+        return int(value) > 0
+    except (TypeError, ValueError):
+        return bool(value)
+
+
+def is_default_home(home) -> bool:
+    try:
+        return path_key(Path(home).expanduser().resolve()) == path_key(
+            DEFAULT_HOME.expanduser().resolve()
+        )
+    except Exception:
+        return False
 
 
 def norm_cwd(value: str) -> str:
@@ -134,6 +196,25 @@ def unique_with_timestamp(path: Path) -> Path:
     return candidate
 
 
+def backup_rel(src: Path, base: Path) -> str | None:
+    """把 src 相对 base 的安全路径转成备份目录内的相对路径。
+
+    绝对路径与盘相对路径（D:x.txt）都会让 join 退化成本身，必须拒绝；
+    `..` 也不能进备份目录，否则能写到备份根之外。
+    """
+    try:
+        rel = os.path.relpath(str(src), str(base))
+    except ValueError:
+        return None
+    if not rel or os.path.isabs(rel) or os.path.splitdrive(rel)[0]:
+        return None
+    raw_parts = re.split(r"[\\/]+", rel)
+    if any(part == ".." for part in raw_parts):
+        return None
+    parts = [part for part in raw_parts if part not in ("", ".")]
+    return "/".join(parts) if parts else None
+
+
 def format_ms(ms) -> str:
     if not ms:
         return "-"
@@ -209,7 +290,8 @@ class WorkBuddy:
         rows = self.all_sessions()
         hits = [r for r in rows if r["id"] == q]
         if not hits and len(q) >= 6:
-            hits = [r for r in rows if r["id"].startswith(q)]
+            ql = q.lower()
+            hits = [r for r in rows if r["id"].lower().startswith(ql)]
         if not hits:
             ql = q.lower()
             hits = [
@@ -287,7 +369,10 @@ class WorkBuddy:
     def create_space(self, path: str, seed_session: dict | None = None) -> dict:
         normalized = norm_cwd(path)
         target_name = Path(normalized).name
-        fallback = {"id": None, "cwd": normalized, "name": target_name, "n": 0, "last": None}
+        fallback = {
+            "id": None, "cwd": normalized, "name": target_name, "n": 0,
+            "last": None, "created": False,
+        }
         if not self.table_exists("spaces"):
             return fallback
         existing = self.con.execute(
@@ -303,6 +388,7 @@ class WorkBuddy:
             item["cwd"] = norm_cwd(item.get("path") or normalized)
             item["n"] = 0
             item["last"] = None
+            item["created"] = False
             return item
         user_id = (seed_session or {}).get("user_id") or self.user_id
         device = self.con.execute(
@@ -320,7 +406,11 @@ class WorkBuddy:
                 "values (?, ?, ?, ?, NULL, ?, 0, NULL, 'active', 'local', NULL, -1, ?, ?, 'seed')",
                 (space_id, user_id, device_id, target_name, str(Path(normalized)), now, now),
             )
-        return {"id": space_id, "cwd": normalized, "name": target_name, "n": 0, "last": None}
+        return {
+            "id": space_id, "cwd": normalized, "name": target_name,
+            "n": 0, "last": None, "created": True,
+            "user_id": user_id, "device_id": device_id,
+        }
 
     def resolve_space(self, query: str) -> dict:
         spaced = self.spaces()
@@ -375,13 +465,13 @@ class WorkBuddy:
             "order by is_playground asc, last_activity_at desc limit 1", (cwd,)
         ).fetchone()
         if row:
-            found = list((self.home / "projects").glob(f"*/{row[0]}.jsonl"))
+            found = sorted((self.home / "projects").glob(f"*/{row[0]}.jsonl"))
             if found:
                 return found[0].parent
         return self.home / "projects" / self.encode_cwd(cwd)
 
     def source_project_dir(self, sid: str) -> Path:
-        found = list((self.home / "projects").glob(f"*/{sid}.jsonl"))
+        found = sorted((self.home / "projects").glob(f"*/{sid}.jsonl"))
         if not found:
             raise UserError(
                 f"找不到任务文件 projects/*/{sid}.jsonl；可能已被移动或删除。"
@@ -450,6 +540,11 @@ class WorkBuddy:
             pass
 
     def backup_db(self, dest_dir: Path):
+        """用 SQLite backup API 生成一致性快照。
+
+        不要再额外复制 -wal/-shm：backup API 已经把 WAL 内容合进目标库，
+        而复制一份「旧主库 + 新 WAL」反而可能拼出一致性不一致的恢复材料。
+        """
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / "workbuddy.db"
         try:
@@ -457,20 +552,22 @@ class WorkBuddy:
             self.con.backup(dst)
             dst.close()
         except Exception:
+            try:
+                self.con.execute("PRAGMA wal_checkpoint(FULL)")
+            except Exception:
+                pass
             shutil.copy2(self.db_path, dest)
-        for name in ("workbuddy.db-wal", "workbuddy.db-shm"):
-            src = self.home / name
-            if src.exists():
-                shutil.copy2(src, dest_dir / name)
 
 
 class Backup:
     def __init__(self, wb: WorkBuddy, base: Path | None = None):
         self.wb = wb
-        self.base = unique_dir((Path(base) if base else wb.home / "backup" / f"workbuddy-move-{now_stamp()}").expanduser().resolve())
+        default = Path.cwd() / "workbuddy-backups" / f"move-{now_stamp()}"
+        self.base = unique_dir((Path(base) if base else default).expanduser().resolve())
         self.base.mkdir(parents=True, exist_ok=True)
         self.items = []
         self.removed_dirs = []
+        self.created_spaces = []
 
     def item_dir(self, sid: str) -> Path:
         d = self.base / sid
@@ -488,6 +585,28 @@ class Backup:
         shutil.copytree(src, dest)
         return dest
 
+    def record_space_insert(self, space: dict) -> Path | None:
+        """记录本次新建的分组行：回滚整批时反向删除，避免留下空壳分组。"""
+        space_id = norm_space_id(space.get("id"))
+        if not space_id:
+            return None
+        path = self.base / "spaces" / f"space-{space_id}.json"
+        payload = {
+            "version": 1, "kind": "space-create", "op": "insert",
+            "space_id": space_id,
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "row": {
+                key: space.get(key)
+                for key in ("id", "name", "cwd", "user_id", "device_id")
+            },
+        }
+        write_text(path, json.dumps(payload, ensure_ascii=False, indent=2))
+        resolved = str(path.resolve())
+        if resolved not in self.items:
+            self.items.append(resolved)
+        self.created_spaces.append(resolved)
+        return path
+
     def batch_manifest(self):
         data = {
             "version": 1,
@@ -495,6 +614,7 @@ class Backup:
             "workbuddy_home": str(self.wb.home),
             "items": self.items,
             "removed_dirs": self.removed_dirs,
+            "created_spaces": self.created_spaces,
         }
         path = self.base / "batch.json"
         write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
@@ -645,8 +765,13 @@ class Mover:
     def _backup_output(self, sid: str, src: Path, old_cwd: Path) -> Path | None:
         if not src.exists() or not src.is_file():
             return None
-        rel = os.path.relpath(str(src), str(old_cwd))
-        dest = self.backup.item_dir(sid) / "outputs" / rel
+        rel = backup_rel(src, old_cwd)
+        if rel is None:
+            digest = hashlib.sha1(
+                os.path.abspath(str(src)).encode("utf-8", "ignore")
+            ).hexdigest()[:8]
+            rel = f"{src.stem}-{digest}{src.suffix}"
+        dest = self.backup.item_dir(sid) / "outputs" / Path(rel)
         return self.backup.copy_file(src, dest)
 
     def _move_output(self, sid: str, src: Path, old_cwd: Path, target_cwd: Path):
@@ -734,7 +859,10 @@ class Mover:
                     hit = True
             if not hit:
                 continue
-            backup = self.backup.copy_file(path, item_dir / "snapshot" / path.name)
+            # 所有账号的快照都叫 sidebar-list-snapshot.json，按用户分子目录才不互相覆盖
+            backup = self.backup.copy_file(
+                path, item_dir / "snapshot" / path.parent.name / path.name
+            )
             write_text(path, json.dumps(data, ensure_ascii=False, separators=(",", ":")))
             patched.append({"path": str(path), "backup": str(backup)})
         return patched
@@ -1071,7 +1199,8 @@ def select_sessions(wb: WorkBuddy, queries: list[str]):
         if not hits:
             raise UserError(f"找不到任务：{q}")
         if len(hits) > 1:
-            print_sessions(hits)
+            if not JSON_MODE:
+                print_sessions(hits)
             raise UserError(
                 f"“{q}”命中 {len(hits)} 条，请改用完整的 session ID 或更精确的标题。"
             )
@@ -1115,7 +1244,8 @@ def select_by_ids(wb: WorkBuddy, ids_text: str):
     sessions = wb.all_sessions()
     out, errors = [], []
     for prefix in wanted:
-        hits = [s for s in sessions if s["id"].startswith(prefix)]
+        low = prefix.lower()
+        hits = [s for s in sessions if s["id"].lower().startswith(low)]
         if not hits:
             errors.append(f"{prefix}(未找到)")
         elif len(hits) > 1:
@@ -1162,15 +1292,15 @@ def resolve_target_space(
         if target.exists():
             if not target.is_dir():
                 raise UserError(f"目标路径不是目录：{path}")
-            print(f"[INFO] 使用已有目录创建分组：{path}（首个迁入任务作为种子）")
+            out(f"[INFO] 使用已有目录创建分组：{path}（首个迁入任务作为种子）")
         else:
             if not allow_missing:
                 raise UserError(f"目录不存在：{path}。确认在该路径创建分组请加 --allow-missing。")
             target.mkdir(parents=True, exist_ok=True)
-            print(f"[INFO] 新建目录并创建分组：{path}（首个迁入任务作为种子）")
+            out(f"[INFO] 新建目录并创建分组：{path}（首个迁入任务作为种子）")
         space = wb.create_space(path, seed_session)
         if space.get("id"):
-            print(f"[INFO] 已写入 WorkBuddy spaces 表：{space['name']} ({space['id']})")
+            out(f"[INFO] 已写入 WorkBuddy spaces 表：{space['name']} ({space['id']})")
         return space
 
 
@@ -1178,13 +1308,13 @@ def cmd_move(args):
     wb = WorkBuddy(Path(args.workbuddy_home), args.user_id)
     try:
         if getattr(args, "require_closed", False) and app_running():
-            print("错误：WorkBuddy 正在运行，--require-closed 要求先退出应用。", file=sys.stderr)
-            return 3
+            die("WorkBuddy 正在运行，--require-closed 要求先退出应用。", 3)
         if args.running_check and app_running():
-            print("提示：检测到 WorkBuddy 正在运行。按配置允许热写；若侧栏未刷新，请切换分组或重启应用。")
+            warn("检测到 WorkBuddy 正在运行。按配置允许热写；若侧栏未刷新，请切换分组或重启应用。", "NOTE")
         sessions = select_sessions(wb, args.session)
         create = bool(getattr(args, "create_space", False))
         allow_missing = bool(getattr(args, "allow_missing", False))
+        created_spaces = []
         if args.mode == "space":
             if not args.to:
                 raise UserError("迁移到分组时必须提供 --to。")
@@ -1194,9 +1324,19 @@ def cmd_move(args):
                 targets = [resolve_target_space(wb, t, create, allow_missing, sessions[0] if sessions else None) for t in args.to]
             else:
                 raise UserError("--to 的数量必须是 1，或与任务数量一致。")
+            for target in targets:
+                space_id = norm_space_id((target or {}).get("id"))
+                if target and target.get("created") and space_id:
+                    if all(norm_space_id(x.get("id")) != space_id for x in created_spaces):
+                        created_spaces.append(target)
         else:
             targets = [None] * len(sessions)
-        backup = Backup(wb, Path(args.backup_dir) if args.backup_dir else None)
+        try:
+            backup = Backup(wb, Path(args.backup_dir) if args.backup_dir else None)
+        except OSError as exc:
+            raise UserError(f"无法创建迁移备份目录（可用 --backup-dir 指定）：{exc}")
+        for space in created_spaces:
+            backup.record_space_insert(space)
         wb.backup_db(backup.base / "db")
         mover = Mover(wb, backup, args)
         results = []
@@ -1206,18 +1346,18 @@ def cmd_move(args):
                 results.append(result)
                 if result["status"] == "ok":
                     mode_label = "仅元数据" if result.get("metadata_only") else "元数据+记忆/产出"
-                    print(
+                    out(
                         f"[OK] {result['title']}  {result['old_cwd']} -> {result['target_cwd']}  "
                         f"[{mode_label}] 记忆 {result['memory']} 文件 / 产出 {result['outputs']} 个"
                     )
-                    print(f"     备份: {result['backup']}")
+                    out(f"     备份: {result['backup']}")
                 else:
-                    print(f"[SKIP] {result['title']}：{result.get('reason')}")
+                    out(f"[SKIP] {result['title']}：{result.get('reason')}")
             except UserError as exc:
-                print(f"[FAIL] {session.get('title') or session['id']}：{exc}", file=sys.stderr)
+                warn(f"{session.get('title') or session['id']}：{exc}", "FAIL")
                 results.append({"session_id": session["id"], "status": "failed", "error": str(exc)})
             except Exception as exc:
-                print(f"[FAIL] {session.get('title') or session['id']}：{exc}", file=sys.stderr)
+                warn(f"{session.get('title') or session['id']}：{exc}", "FAIL")
                 results.append({"session_id": session["id"], "status": "failed", "error": str(exc)})
         removed_dirs = []
         if not getattr(args, "keep_orphans", False):
@@ -1229,25 +1369,162 @@ def cmd_move(args):
         ok = sum(1 for r in results if r.get("status") == "ok")
         skip = sum(1 for r in results if r.get("status") == "skipped")
         fail = sum(1 for r in results if r.get("status") == "failed")
-        print(f"\n完成：成功 {ok}，跳过 {skip}，失败 {fail}")
+        out(f"\n完成：成功 {ok}，跳过 {skip}，失败 {fail}")
+        if created_spaces:
+            out(f"新建分组 {len(created_spaces)} 个；回滚整批时会一并删除：")
+            for space in created_spaces:
+                out(f"  - {space.get('name')}  {space.get('cwd')}")
         if removed_dirs:
-            print(f"已清理 {len(removed_dirs)} 个空源项目目录：")
+            out(f"已清理 {len(removed_dirs)} 个空源项目目录：")
             for d in removed_dirs:
-                print(f"  - {d}")
-        print(f"批次清单：{batch}")
+                out(f"  - {d}")
+        out(f"批次清单：{batch}")
         if args.json:
-            print(json.dumps({"results": results, "batch_manifest": str(batch)}, ensure_ascii=False, indent=2))
+            emit_json({
+                "results": results,
+                "batch_manifest": str(batch),
+                "backup": str(backup.base),
+                "removed_dirs": removed_dirs,
+                "created_spaces": [
+                    {"id": s.get("id"), "name": s.get("name"), "cwd": s.get("cwd")}
+                    for s in created_spaces
+                ],
+                "warnings": list(WARNINGS),
+            })
         return 0 if fail == 0 else 1
     finally:
         wb.close()
 
 
+def _manifest_under(value, root, label: str) -> Path:
+    """清单是外部文件：其中每个路径都必须落在允许的根目录内。"""
+    if not value:
+        raise UserError(f"回滚清单不合法：缺少 {label}")
+    try:
+        path = Path(str(value)).expanduser().resolve()
+        base = Path(str(root)).expanduser().resolve()
+    except Exception as exc:
+        raise UserError(f"回滚清单不合法：{label} 路径无法解析：{exc}")
+    if not is_under(path, base):
+        raise UserError(f"回滚清单不合法：{label} 不在允许目录内：{path}")
+    return path
+
+
+def validate_manifest(wb: WorkBuddy, data: dict) -> None:
+    """校验回滚清单的路径与结构，避免手改清单把文件搬出/写出允许范围。"""
+    if not isinstance(data, dict):
+        raise UserError("回滚清单不合法：顶层不是对象")
+    if data.get("kind") == "space-create":
+        if data.get("op") != "insert" or not norm_space_id(data.get("space_id")):
+            raise UserError("回滚清单不合法：space-create 缺少 op=insert 或 space_id")
+        return
+    sid = str(data.get("session_id") or "").strip()
+    if not sid:
+        raise UserError("回滚清单不合法：缺少 session_id")
+    if data.get("mode") not in ("space", "task"):
+        raise UserError(f"回滚清单不合法：mode={data.get('mode')!r}")
+    if not wb.session(sid):
+        raise UserError(f"回滚清单里的任务不存在：{sid}")
+    backup_dir = data.get("backup_dir")
+    if not backup_dir or not Path(str(backup_dir)).expanduser().is_dir():
+        raise UserError(f"回滚清单不合法：备份目录不存在：{backup_dir}")
+    from_cwd = data.get("from_cwd")
+    to_cwd = data.get("to_cwd")
+    if not from_cwd or not to_cwd:
+        raise UserError("回滚清单不合法：缺少 from_cwd / to_cwd")
+    projects_root = wb.home / "projects"
+
+    if data.get("mode") == "space":
+        session = data.get("session") or {}
+        for key in ("src_jsonl", "dst_jsonl"):
+            path = _manifest_under(session.get(key), projects_root, key)
+            if path.name != f"{sid}.jsonl":
+                raise UserError(
+                    f"回滚清单不合法：{key} 文件名必须为 {sid}.jsonl，实际 {path.name}"
+                )
+        for key in ("src_dir", "dst_dir"):
+            value = session.get(key)
+            if value:
+                path = _manifest_under(value, projects_root, key)
+                if path.name != sid:
+                    raise UserError(
+                        f"回滚清单不合法：{key} 目录名必须为 {sid}，实际 {path.name}"
+                    )
+        for key in ("target_jsonl_backup", "target_dir_backup"):
+            value = session.get(key)
+            if value:
+                _manifest_under(value, backup_dir, key)
+
+    memory_roots = {
+        "source_file": Path(str(from_cwd)) / ".workbuddy" / "memory",
+        "target_file": Path(str(to_cwd)) / ".workbuddy" / "memory",
+    }
+    for mem in data.get("memory") or []:
+        for key in ("source_file", "target_file"):
+            _manifest_under(mem.get(key), memory_roots[key], f"memory.{key}")
+        for key in ("source_backup", "target_backup"):
+            value = mem.get(key)
+            if value:
+                _manifest_under(value, backup_dir, f"memory.{key}")
+
+    for rec in data.get("outputs") or []:
+        src = _manifest_under(rec.get("src"), from_cwd, "output.src")
+        _manifest_under(rec.get("dst"), to_cwd, "output.dst")
+        rel = backup_rel(src, Path(str(from_cwd)))
+        recorded = str(rec.get("rel") or "").replace("\\", "/")
+        if rel and recorded and rel != recorded:
+            raise UserError(
+                f"回滚清单不合法：output.rel 与 src 不一致（{recorded} != {rel}）"
+            )
+        for key in ("src_backup", "dst_backup"):
+            value = rec.get(key)
+            if value:
+                _manifest_under(value, backup_dir, f"output.{key}")
+
+    for snap in data.get("snapshots") or []:
+        path = _manifest_under(snap.get("path"), wb.home, "snapshot.path")
+        if path.name != "sidebar-list-snapshot.json":
+            raise UserError(f"回滚清单不合法：snapshot.path 不是侧栏快照：{path.name}")
+        _manifest_under(snap.get("backup"), backup_dir, "snapshot.backup")
+
+
+def rollback_manifest_item(wb: WorkBuddy, data: dict) -> dict:
+    if data.get("kind") == "space-create":
+        space_id = norm_space_id(data.get("space_id"))
+        row = wb.con.execute("select id from spaces where id=?", (space_id,)).fetchone()
+        if not row:
+            return {"kind": "space-create", "space_id": space_id, "status": "miss", "deleted": 0}
+        used = wb.con.execute(
+            "select count(*) from sessions where space_id=?", (space_id,)
+        ).fetchone()[0]
+        if used:
+            raise UserError(f"分组仍被 {used} 条任务引用，拒绝回滚删除")
+        with wb.con:
+            cur = wb.con.execute("delete from spaces where id=?", (space_id,))
+        return {
+            "kind": "space-create", "space_id": space_id,
+            "status": "ok", "deleted": cur.rowcount,
+        }
+    Mover(wb, None, None).rollback_manifest(data)
+    return {"kind": "move", "session_id": data.get("session_id"), "status": "ok"}
+
+
 def cmd_rollback(args):
     wb = WorkBuddy(Path(args.workbuddy_home), args.user_id)
     try:
-        if getattr(args, "require_closed", False) and app_running():
-            print("错误：WorkBuddy 正在运行，--require-closed 要求先退出应用。", file=sys.stderr)
-            return 3
+        force_hot = bool(getattr(args, "force_hot", False))
+        running = app_running()
+        if running and is_default_home(args.workbuddy_home):
+            if not force_hot:
+                die(
+                    "WorkBuddy 正在运行。回滚会直接改写数据库行并搬回文件，"
+                    "与运行中的应用并发可能损坏数据。请完全退出后重试；"
+                    "确要在运行中执行，加 --force-hot。",
+                    3,
+                )
+            warn("--force-hot：WorkBuddy 正在运行，回滚存在数据损坏风险。")
+        elif getattr(args, "require_closed", False) and running:
+            die("WorkBuddy 正在运行，--require-closed 要求先退出应用。", 3)
         manifests = []
         if args.manifest:
             manifests = [Path(p).expanduser().resolve() for p in args.manifest]
@@ -1265,18 +1542,47 @@ def cmd_rollback(args):
                 raise UserError(f"批次清单里没有可回滚的条目：{args.batch}")
         else:
             raise UserError("请提供 --manifest 或 --batch。")
-        mover = Mover(wb, None, args)
-        for path in reversed(manifests):
+
+        loaded = []
+        for path in manifests:
             data = load_json(path)
             if not data:
-                print(f"[FAIL] 无法读取清单：{path}", file=sys.stderr)
+                warn(f"无法读取清单：{path}（跳过）", "FAIL")
                 continue
+            # 全部先校验再执行：清单被手改时整批中止，不先回滚一半
+            validate_manifest(wb, data)
+            loaded.append((path, data))
+        if not loaded:
+            raise UserError("没有可回滚的有效清单。")
+
+        results = []
+        ok = fail = 0
+        for path, data in reversed(loaded):
             try:
-                mover.rollback_manifest(data)
-                print(f"[OK] 已回滚 {data.get('title')} ({data.get('session_id')})")
+                info = rollback_manifest_item(wb, data)
+                ok += 1
+                info["path"] = str(path)
+                info["title"] = data.get("title") or "新建分组"
+                results.append(info)
+                out(f"[OK] 已回滚 {info['title']} ({data.get('space_id') or data.get('session_id')})")
             except Exception as exc:
-                print(f"[FAIL] 回滚 {data.get('session_id')} 失败：{exc}", file=sys.stderr)
-        return 0
+                fail += 1
+                results.append({
+                    "path": str(path),
+                    "title": data.get("title") or "新建分组",
+                    "session_id": data.get("session_id"),
+                    "space_id": data.get("space_id"),
+                    "status": "failed",
+                    "error": str(exc),
+                })
+                warn(f"回滚 {data.get('space_id') or data.get('session_id')} 失败：{exc}", "FAIL")
+        out(f"\n完成：恢复 {ok}，失败 {fail}")
+        if args.json:
+            emit_json({
+                "restored": ok, "failed": fail, "items": results,
+                "applied": True, "warnings": list(WARNINGS),
+            })
+        return 0 if fail == 0 else 1
     finally:
         wb.close()
 
@@ -1286,11 +1592,20 @@ def cmd_find(args):
     try:
         if args.query:
             rows = wb.find_sessions(args.query)
+            if not rows:
+                raise UserError(f"找不到任务：{args.query}")
         else:
             rows = wb.all_sessions()[: args.limit]
-        if not rows:
-            raise UserError(f"找不到任务：{args.query}")
-        print_sessions(rows, args.json)
+            if not rows:
+                if args.json:
+                    emit_json([])
+                else:
+                    print("没有任务。")
+                return 0
+        if args.json:
+            emit_json(rows)
+        else:
+            print_sessions(rows)
         return 0
     finally:
         wb.close()
@@ -1314,14 +1629,14 @@ def cmd_show(args):
 
 def _finish_doctor(checks, as_json: bool):
     if as_json:
-        print(json.dumps({"checks": checks}, ensure_ascii=False, indent=2))
+        emit_json({"checks": checks, "warnings": list(WARNINGS)})
     else:
         for c in checks:
             print(f"[{c['status'].upper()}] {c['check']}: {c['detail']}")
         ok = sum(1 for c in checks if c["status"] == "ok")
-        warn = sum(1 for c in checks if c["status"] == "warn")
+        warn_n = sum(1 for c in checks if c["status"] == "warn")
         fail = sum(1 for c in checks if c["status"] == "fail")
-        print(f"\n体检完成：{ok} OK, {warn} WARN, {fail} FAIL")
+        print(f"\n体检完成：{ok} OK, {warn_n} WARN, {fail} FAIL")
     return 0 if all(c["status"] == "ok" for c in checks) else 1
 
 
@@ -1452,12 +1767,17 @@ def cmd_doctor(args):
                 if p.is_dir() and ("backup" in p.name or "备份" in p.name):
                     backup_dirs.append(p.resolve())
         backup_dirs = sorted(set(backup_dirs), key=lambda p: p.stat().st_mtime, reverse=True)
-        add(
-            "备份",
-            "ok" if backup_dirs else "warn",
-            f"{len(backup_dirs)} 个备份目录"
-            + (f"，最新 {backup_dirs[0].name}" if backup_dirs else "，建议先运行 backup"),
-        )
+        if backup_dirs:
+            age_days = max(0, int((time.time() - backup_dirs[0].stat().st_mtime) / 86400))
+            add(
+                "备份",
+                "warn" if age_days > 14 else "ok",
+                f"{len(backup_dirs)} 个备份目录，最新 {backup_dirs[0].name}"
+                f"（{age_days} 天前）"
+                + ("；超过 14 天，建议重新运行 backup" if age_days > 14 else ""),
+            )
+        else:
+            add("备份", "warn", "0 个备份目录，建议先运行 backup")
     finally:
         wb.close()
     return _finish_doctor(checks, args.json)
@@ -1481,7 +1801,7 @@ def cmd_backup(args):
                 "sessions": meta.get("sessions"),
             })
         if args.json:
-            print(json.dumps(rows, ensure_ascii=False, indent=2))
+            emit_json(rows)
         else:
             print(f"{'备份':<24} {'大小':>9}  任务")
             print("-" * 60)
@@ -1499,14 +1819,15 @@ def cmd_backup(args):
     finally:
         dst.close()
         src.close()
-    for name in ("workbuddy.db-wal", "workbuddy.db-shm"):
-        src_file = home / name
-        if src_file.exists():
-            shutil.copy2(src_file, dest / name)
     con = sqlite3.connect(str(db_path))
     try:
-        sessions = con.execute("select count(*) from sessions where deleted_at is null").fetchone()[0]
-        users = con.execute("select count(distinct user_id) from sessions where deleted_at is null").fetchone()[0]
+        sessions = con.execute(
+            "select count(*) from sessions where deleted_at is null or deleted_at < 0"
+        ).fetchone()[0]
+        users = con.execute(
+            "select count(distinct user_id) from sessions "
+            "where deleted_at is null or deleted_at < 0"
+        ).fetchone()[0]
     finally:
         con.close()
     meta = {
@@ -1515,6 +1836,7 @@ def cmd_backup(args):
         "db": str(db_path),
         "sessions": sessions,
         "users": users,
+        "note": "SQLite backup API 生成一致性快照；未复制 -wal/-shm",
     }
     write_text(dest / "meta.json", json.dumps(meta, ensure_ascii=False, indent=2))
     removed = []
@@ -1524,12 +1846,14 @@ def cmd_backup(args):
         for old in dirs[:-keep]:
             shutil.rmtree(old)
             removed.append(old.name)
-    print(f"[OK] 整库备份：{dest}（{sessions} 条任务，{users} 个账号）")
+    out(f"[OK] 整库备份：{dest}（{sessions} 条任务，{users} 个账号）")
     if removed:
-        print(f"     已清理旧备份 {len(removed)} 份：{', '.join(removed)}")
+        out(f"     已清理旧备份 {len(removed)} 份：{', '.join(removed)}")
     if args.json:
-        print(json.dumps({"backup": str(dest), "meta": meta, "removed": removed},
-                         ensure_ascii=False, indent=2))
+        emit_json({
+            "backup": str(dest), "meta": meta, "removed": removed,
+            "warnings": list(WARNINGS),
+        })
     return 0
 
 
@@ -1537,9 +1861,17 @@ SYSTEM_REMINDER_RE = re.compile(r"<system-reminder\b[\s\S]*?</system-reminder>",
 TURN_ABORTED_RE = re.compile(r"<turn_aborted\b[\s\S]*?</turn_aborted>", re.I)
 
 
+def find_jsonls(home: Path, sid: str):
+    """返回所有含该任务正文的路径（按名字排序，顺序稳定）。"""
+    return sorted((Path(home) / "projects").glob(f"*/{sid}.jsonl"))
+
+
 def find_jsonl(home: Path, sid: str):
-    found = list((Path(home) / "projects").glob(f"*/{sid}.jsonl"))
-    return found[0] if found else None
+    """命中多个副本时取排序后的第一个，不再依赖 glob 的偶然顺序。"""
+    hits = find_jsonls(home, sid)
+    if len(hits) > 1:
+        warn(f"{sid[:8]} 有 {len(hits)} 份正文副本，取 {hits[0].parent.name}", "NOTE")
+    return hits[0] if hits else None
 
 
 WRITE_TOOL_NAMES = {
@@ -1743,9 +2075,9 @@ def title_problems(title: str, require_prefix: bool, min_len: int = 20, max_len:
     if not title:
         return ["标题为空"]
     if len(title) < min_len:
-        problems.append(f"长度 {len(title)} 少于 {min_len} 字")
+        problems.append(f"长度 {len(title)} 字符少于 {min_len} 字符")
     if len(title) > max_len:
-        problems.append(f"长度 {len(title)} 超过 {max_len} 字")
+        problems.append(f"长度 {len(title)} 字符超过 {max_len} 字符")
     if any(ord(ch) < 32 for ch in title):
         problems.append("包含控制字符")
     bad = sorted({ch for ch in title if ch in FORBIDDEN_TITLE_CHARS})
@@ -1802,9 +2134,9 @@ def set_session_title(wb: WorkBuddy, sid: str, title: str):
 def cmd_list(args):
     wb = WorkBuddy(Path(args.workbuddy_home), "*" if args.all_users else args.user_id)
     try:
-        rows = filter_session_rows(wb.all_sessions(include_deleted=args.include_deleted), args)
-        if args.limit:
-            rows = rows[: args.limit]
+        matched = filter_session_rows(wb.all_sessions(include_deleted=args.include_deleted), args)
+        total = len(matched)
+        rows = matched[: args.limit] if args.limit else matched
         items = []
         for r in rows:
             p = find_jsonl(wb.home, r["id"])
@@ -1812,7 +2144,7 @@ def cmd_list(args):
                 "session_id": r["id"],
                 "user_id": r["user_id"],
                 "is_playground": int(r["is_playground"] or 0),
-                "deleted": bool(r.get("deleted_at")),
+                "deleted": is_deleted(r),
                 "cwd": r["cwd"],
                 "title": r.get("custom_title") or r.get("title") or "",
                 "last_activity_at": r.get("last_activity_at"),
@@ -1820,7 +2152,12 @@ def cmd_list(args):
                 "bytes": p.stat().st_size if p else None,
             })
         if args.json:
-            print(json.dumps(items, ensure_ascii=False, indent=2))
+            if total > len(items):
+                print(
+                    f"[NOTE] 另有 {total - len(items)} 条被 --limit {args.limit} 截断",
+                    file=sys.stderr,
+                )
+            emit_json(items)
             return 0
         print(f"{'ID':<38} {'账号':<9} {'类型':<4} {'大小':>9}  标题")
         print("-" * 110)
@@ -1832,6 +2169,8 @@ def cmd_list(args):
                 f"{it['title'][:48]}"
             )
         print(f"\n共 {len(items)} 条")
+        if total > len(items):
+            print(f"另有 {total - len(items)} 条被 --limit {args.limit} 截断，去掉或调大 --limit 可查看。")
         return 0
     finally:
         wb.close()
@@ -1848,8 +2187,8 @@ def cmd_extract(args):
                 sessions = select_sessions(wb, args.session)
             else:
                 raise UserError("请用 --task 指定任务，或使用 --all。")
-        out = Path(args.out).expanduser().resolve()
-        out.mkdir(parents=True, exist_ok=True)
+        out_path = Path(args.out).expanduser().resolve()
+        out_path.mkdir(parents=True, exist_ok=True)
         manifest = []
         for s in sessions:
             sid = s["id"]
@@ -1871,7 +2210,7 @@ def cmd_extract(args):
             if not jsonl:
                 entry["error"] = "找不到 JSONL"
                 manifest.append(entry)
-                print(f"[FAIL] {sid} 找不到 JSONL", file=sys.stderr)
+                warn(f"{sid} 找不到 JSONL", "FAIL")
                 continue
             try:
                 dialog, users, assistants = parse_dialog(jsonl)
@@ -1890,8 +2229,8 @@ def cmd_extract(args):
                     chunks.append(f"[{tag}] {text}")
                     chunks.append("")
                 body = "\n".join(chunks)
-                text_file = out / f"{sid}.txt"
-                digest_file = out / f"{sid}.digest.txt"
+                text_file = out_path / f"{sid}.txt"
+                digest_file = out_path / f"{sid}.digest.txt"
                 digest = build_digest(dialog)
                 write_text(text_file, body)
                 write_text(digest_file, digest)
@@ -1901,17 +2240,18 @@ def cmd_extract(args):
                     "lines": body.count("\n") + 1,
                     "messages_user": users, "messages_assistant": assistants,
                 })
-                print(f"[OK] {sid[:8]} {users}/{assistants} 条消息 → {text_file.name} ({len(body)} 字)")
+                out(f"[OK] {sid[:8]} {users}/{assistants} 条消息 → {text_file.name} ({len(body)} 字)")
             except Exception as exc:
                 entry["error"] = str(exc)
-                print(f"[FAIL] {sid} 提取失败：{exc}", file=sys.stderr)
+                warn(f"{sid} 提取失败：{exc}", "FAIL")
             manifest.append(entry)
-        manifest_path = out / "manifest.json"
+        manifest_path = out_path / "manifest.json"
         write_text(manifest_path, json.dumps({
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "workbuddy_home": str(wb.home),
             "items": manifest,
         }, ensure_ascii=False, indent=2))
+        shard_files = []
         if args.shards > 0:
             usable = [e for e in manifest if not e.get("error") and e.get("text_file")]
             usable.sort(key=lambda x: -(x.get("chars") or 0))
@@ -1921,7 +2261,7 @@ def cmd_extract(args):
                 idx = min(range(args.shards), key=lambda k: totals[k])
                 bins[idx].append(entry)
                 totals[idx] += entry.get("chars") or 0
-            shard_dir = out / "shards"
+            shard_dir = out_path / "shards"
             shard_dir.mkdir(parents=True, exist_ok=True)
             for idx, bucket in enumerate(bins, 1):
                 payload = {
@@ -1936,25 +2276,70 @@ def cmd_extract(args):
                         "text_file": e["text_file"], "digest_file": e["digest_file"],
                     } for e in bucket],
                 }
-                write_text(shard_dir / f"group{idx}.json",
-                           json.dumps(payload, ensure_ascii=False, indent=2))
-                print(f"[SHARD] group{idx}: {len(bucket)} 条 / {totals[idx - 1]} 字")
-            print(f"分片清单：{shard_dir}")
-        print(f"\n清单：{manifest_path}")
-        if args.json:
-            print(json.dumps(manifest, ensure_ascii=False, indent=2))
+                shard_path = shard_dir / f"group{idx}.json"
+                write_text(shard_path, json.dumps(payload, ensure_ascii=False, indent=2))
+                shard_files.append({
+                    "group": idx, "path": str(shard_path),
+                    "count": len(bucket), "total_chars": totals[idx - 1],
+                })
+                out(f"[SHARD] group{idx}: {len(bucket)} 条 / {totals[idx - 1]} 字")
+            out(f"分片清单：{shard_dir}")
+        out(f"\n清单：{manifest_path}")
         bad = sum(1 for e in manifest if e.get("error"))
+        if args.json:
+            emit_json({
+                "out_dir": str(out_path),
+                "count": len(manifest),
+                "items": manifest,
+                "manifest": str(manifest_path),
+                "shards": shard_files,
+                "skipped": bad,
+                "warnings": list(WARNINGS),
+            })
         return 1 if bad else 0
     finally:
         wb.close()
+
+
+def resolve_session_ref(wb: WorkBuddy, ref) -> tuple[dict | None, str | None]:
+    """按完整 ID 或唯一前缀定位任务；前缀撞车时报错而不是随便取一条。"""
+    ref = str(ref or "").strip()
+    if not ref:
+        return None, "缺少任务 ID"
+    row = wb.session(ref)
+    if row:
+        return row, None
+    low = ref.lower()
+    if len(low) < 6:
+        return None, "ID 前缀至少 6 位"
+    rows = wb.con.execute(
+        "select * from sessions where substr(lower(id),1,?)=? order by id",
+        (len(low), low),
+    ).fetchall()
+    if not rows:
+        return None, "库中不存在"
+    if len(rows) > 1:
+        return None, f"ID 前缀不唯一（{len(rows)} 条命中），请给完整 ID"
+    return dict(rows[0]), None
+
+
+def restore_snapshots_from_backup(wb: WorkBuddy, user_id, base: Path) -> list[str]:
+    restored = []
+    for path, _data in wb.snapshots():
+        if path.parent.name != str(user_id):
+            continue
+        backup = base / "snapshots" / str(user_id) / path.name
+        if backup.exists():
+            shutil.copy2(backup, path)
+            restored.append(str(path))
+    return restored
 
 
 def cmd_apply_titles(args):
     wb = WorkBuddy(Path(args.workbuddy_home), args.user_id)
     try:
         if getattr(args, "require_closed", False) and app_running():
-            print("错误：WorkBuddy 正在运行，--require-closed 要求先退出应用。", file=sys.stderr)
-            return 3
+            die("WorkBuddy 正在运行，--require-closed 要求先退出应用。", 3)
         proposals_path = Path(args.proposals)
         data = load_json(proposals_path)
         if data is None:
@@ -1968,61 +2353,93 @@ def cmd_apply_titles(args):
             or args.min_title_len > args.max_title_len
         ):
             raise UserError("标题长度范围限定 10–30，默认 20–30；请检查 --min-title-len / --max-title-len。")
-        by_id = {}
-        categories = {}
-        for raw in raw_items:
-            sid = str((raw or {}).get("session_id") or (raw or {}).get("sid") or "").strip()
-            if not sid:
-                continue
-            raw_title = normalize_title((raw or {}).get("new_title"))
-            category = normalize_title((raw or {}).get("category")).strip("[]")
-            if category and raw_title and not raw_title.startswith("["):
-                raw_title = f"[{category}] {raw_title}"
-            by_id[sid] = raw_title
-            if category:
-                categories[sid] = category
         base = Path(args.backup_dir) if args.backup_dir else Path.cwd() / f"workbuddy-rename-backup-{now_stamp()}"
         base = unique_dir(base)
         results = []
-        for sid, title in by_id.items():
-            row = wb.session(sid)
-            if not row or row.get("deleted_at"):
-                results.append({"session_id": sid, "status": "failed", "error": "任务不存在或已删除"})
+        planned = []
+        by_sid = {}
+        for raw in raw_items:
+            raw = raw or {}
+            ref = raw.get("session_id") or raw.get("sid")
+            row, error = resolve_session_ref(wb, ref)
+            if error:
+                results.append({
+                    "session_id": str(ref or ""), "status": "failed",
+                    "error": error,
+                })
                 continue
-            jsonl = find_jsonl(wb.home, sid)
-            if not jsonl:
-                results.append({"session_id": sid, "status": "failed", "error": "找不到 JSONL"})
+            sid = row["id"]
+            if is_deleted(row):
+                results.append({
+                    "session_id": sid, "status": "skipped",
+                    "error": "任务已删除，已跳过",
+                })
                 continue
+            raw_title = normalize_title(raw.get("new_title"))
+            category = normalize_title(raw.get("category")).strip("[]")
+            if category and raw_title and not raw_title.startswith("["):
+                raw_title = f"[{category}] {raw_title}"
             problems = title_problems(
-                title, args.require_prefix, args.min_title_len, args.max_title_len
+                raw_title, args.require_prefix, args.min_title_len, args.max_title_len
             )
             if problems:
                 results.append({
-                    "session_id": sid, "status": "failed", "title": title,
+                    "session_id": sid, "status": "failed", "title": raw_title,
                     "old_title": row.get("title"), "error": "；".join(problems),
                 })
                 continue
-            results.append({
-                "session_id": sid, "status": "planned", "title": title,
-                "category": categories.get(sid),
-                "old_title": row.get("title"), "user_id": row["user_id"],
+            jsonl = find_jsonl(wb.home, sid)
+            if not jsonl:
+                results.append({
+                    "session_id": sid, "status": "failed", "title": raw_title,
+                    "error": "找不到 JSONL",
+                })
+                continue
+            rec = {
+                "session_id": sid, "status": "planned", "title": raw_title,
+                "category": category or None,
+                "old_title": row.get("title"),
+                "old_custom_title": row.get("custom_title"),
+                "user_id": row["user_id"],
                 "cwd": row["cwd"], "is_playground": int(row["is_playground"] or 0),
                 "jsonl": str(jsonl),
-            })
+            }
+            if sid in by_sid:
+                results.append({
+                    "session_id": sid, "status": "skipped",
+                    "error": "同一任务在提案里重复出现，采用最后一条",
+                })
+                planned = [p for p in planned if p["session_id"] != sid]
+                results = [r for r in results if not (r.get("session_id") == sid and r.get("status") == "planned")]
+            by_sid[sid] = rec
+            planned.append(rec)
+        results.extend(planned)
+
         if getattr(args, "dry_run", False) or not getattr(args, "apply", False):
-            planned = [r for r in results if r["status"] == "planned"]
             failed = [r for r in results if r["status"] == "failed"]
             if args.json:
-                print(json.dumps({"dry_run": True, "results": results}, ensure_ascii=False, indent=2))
+                emit_json({
+                    "applied": False, "dry_run": True,
+                    "plan": planned,
+                    "skipped": [r for r in results if r["status"] == "skipped"],
+                    "results": results, "backup": None,
+                    "warnings": list(WARNINGS),
+                })
             else:
                 for r in results:
                     if r["status"] == "planned":
-                        print(f"[PLAN] {r['session_id'][:8]} {r['title']}")
+                        out(f"[PLAN] {r['session_id'][:8]} {r['title']}")
+                    elif r["status"] == "skipped":
+                        out(f"[SKIP] {r['session_id'][:8]} {r.get('error')}")
                     else:
-                        print(f"[FAIL] {r['session_id'][:8]} {r.get('error')}")
-                print(f"\n干跑：计划 {len(planned)} 条，失败 {len(failed)} 条；确认后加 --apply 落盘。")
+                        out(f"[FAIL] {r['session_id'][:8]} {r.get('error')}")
+                out(f"\n干跑：计划 {len(planned)} 条，失败 {len(failed)} 条；确认后加 --apply 落盘。")
             return 0 if not failed else 1
-        base.mkdir(parents=True, exist_ok=True)
+
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise UserError(f"无法创建重命名备份目录（可用 --backup-dir 指定）：{exc}")
         wb.backup_db(base / "db")
         for path, _data in wb.snapshots():
             dest = base / "snapshots" / path.parent.name / path.name
@@ -2044,7 +2461,8 @@ def cmd_apply_titles(args):
                 snaps = patch_snapshots_title(wb, sid, rec["title"])
                 ok_jsonl = last_custom_title(jsonl) == rec["title"]
                 row = wb.session(sid)
-                ok_db = bool(row) and (row.get("title") or "") == rec["title"]
+                ok_db = bool(row) and (row.get("title") or "") == rec["title"] \
+                    and (row.get("custom_title") or "") == rec["title"]
                 ok_snap = all(
                     any(item.get("id") == sid and item.get("title") == rec["title"]
                         for item in (load_json(Path(p)) or {}).get("items", []))
@@ -2056,10 +2474,34 @@ def cmd_apply_titles(args):
                     "backup": str(session_backup),
                     "checks": {"jsonl": ok_jsonl, "db": ok_db, "snapshot": ok_snap},
                 })
-                print(f"[{'OK' if rec['status'] == 'ok' else 'WARN'}] {sid[:8]} {rec['title']}")
+                out(f"[{'OK' if rec['status'] == 'ok' else 'WARN'}] {sid[:8]} {rec['title']}")
             except Exception as exc:
-                rec.update({"status": "failed", "error": str(exc)})
-                print(f"[FAIL] {sid[:8]} {exc}", file=sys.stderr)
+                # 三层写入任何一层失败都尽力还原，避免「JSONL 改了、数据库没改」的半截状态
+                recovery = []
+                try:
+                    shutil.copy2(session_backup, jsonl)
+                    recovery.append("jsonl")
+                except Exception:
+                    pass
+                try:
+                    with wb.con:
+                        wb.con.execute(
+                            "update sessions set title=?, custom_title=? where id=?",
+                            (rec.get("old_title"), rec.get("old_custom_title"), sid),
+                        )
+                    recovery.append("db")
+                except Exception:
+                    pass
+                try:
+                    if restore_snapshots_from_backup(wb, rec.get("user_id"), base):
+                        recovery.append("snapshot")
+                except Exception:
+                    pass
+                rec.update({
+                    "status": "failed", "error": str(exc),
+                    "rolled_back": recovery,
+                })
+                warn(f"{sid[:8]} {exc}", "FAIL")
             applied.append(rec)
         manifest_path = base / "rename-manifest.json"
         write_text(manifest_path, json.dumps({
@@ -2068,11 +2510,17 @@ def cmd_apply_titles(args):
             "items": applied,
         }, ensure_ascii=False, indent=2))
         ok = sum(1 for r in applied if r["status"] == "ok")
+        skipped = sum(1 for r in applied if r["status"] == "skipped")
         failed = sum(1 for r in applied if r["status"] in ("failed", "verify_failed"))
-        print(f"\n完成：成功 {ok}，失败 {failed}，共 {len(applied)} 条")
-        print(f"备份与清单：{base}")
+        out(f"\n完成：成功 {ok}，跳过 {skipped}，失败 {failed}，共 {len(applied)} 条")
+        out(f"备份与清单：{base}")
         if args.json:
-            print(json.dumps({"results": applied, "backup": str(base)}, ensure_ascii=False, indent=2))
+            emit_json({
+                "applied": True, "plan": planned,
+                "skipped": [r for r in applied if r["status"] == "skipped"],
+                "results": applied, "backup": str(base),
+                "warnings": list(WARNINGS),
+            })
         return 0 if failed == 0 else 1
     finally:
         wb.close()
@@ -2095,6 +2543,12 @@ def cmd_rename(args):
             if args.limit:
                 sessions = sessions[: args.limit]
             if not sessions:
+                if args.json:
+                    emit_json({
+                        "out_dir": None, "count": 0, "items": [], "manifest": None,
+                        "shards": [], "skipped": 0, "warnings": list(WARNINGS),
+                    })
+                    return 0
                 raise UserError("没有匹配的任务。")
         finally:
             wb.close()
@@ -2224,6 +2678,8 @@ def build_parser():
     rb.add_argument("--batch", default=None)
     rb.add_argument("--backup-dir", default=None)
     rb.add_argument("--require-closed", action="store_true")
+    rb.add_argument("--force-hot", action="store_true",
+                    help="WorkBuddy 运行时仍执行回滚（有数据损坏风险）")
     rb.add_argument("--json", action="store_true")
     rb.set_defaults(func=cmd_rollback, running_check=False, no_artifacts=False)
 
@@ -2231,8 +2687,12 @@ def build_parser():
 
 
 def main(argv=None):
+    global JSON_MODE
+    _force_utf8(sys.stdout)
+    _force_utf8(sys.stderr)
     parser = build_parser()
     args = parser.parse_args(argv)
+    JSON_MODE = bool(getattr(args, "json", False))
     if args.command in ("spaces", "groups"):
         wb = WorkBuddy(Path(args.workbuddy_home), args.user_id)
         try:
@@ -2246,12 +2706,21 @@ def main(argv=None):
         args.mode = "space"
     try:
         return args.func(args)
+    except SystemExit:
+        raise
     except UserError as exc:
-        print(f"错误：{exc}", file=sys.stderr)
-        return 2
+        die(str(exc), 2)
     except KeyboardInterrupt:
         print("已取消。", file=sys.stderr)
+        if JSON_MODE:
+            print(json.dumps({"error": "已取消", "exit": 130}, ensure_ascii=False))
         return 130
+    except BrokenPipeError:
+        return 1
+    except Exception as exc:
+        if JSON_MODE:
+            die(f"{type(exc).__name__}: {exc}", 1)
+        raise
 
 
 if __name__ == "__main__":

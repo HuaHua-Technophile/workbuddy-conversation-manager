@@ -85,6 +85,8 @@ cp -r skills/workbuddy-task-manager "$HOME/.workbuddy/skills/"
 
 ```bash
 python "$HOME/.workbuddy/skills/workbuddy-task-manager/scripts/workbuddy_tasks.py" doctor
+# 仓库内跑端到端测试（26 项，不碰真实库）
+python -m unittest discover -s skills/workbuddy-task-manager/tests -v
 ```
 
 ## 快速开始
@@ -117,7 +119,7 @@ python scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.json --apply
 ]
 ```
 
-`sid` 支持完整 UUID 或前 8 位；`new_title` 可不带前缀，`category` 会自动补成 `[分类] 标题`。标题默认长度 **20–30 字**，可用 `--min-title-len` / `--max-title-len` 调整到 **10–30**。
+`sid` 支持完整 UUID 或前 8 位；导入时按唯一前缀解析，撞车会报「ID 前缀不唯一」，不会改错任务。`new_title` 可不带前缀，`category` 会自动补成 `[分类] 标题`。标题默认长度 **20–30 字符**（前缀和空格计入），可用 `--min-title-len` / `--max-title-len` 调整到 **10–30**。
 
 ## 迁移任务
 
@@ -146,16 +148,22 @@ python scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-gr
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
 | `move` | 迁移任务/分组；默认连记忆、产出和任务文件一起搬 | 是 |
 | `backup` | 整库快照，默认保留最近 10 份 | 否 |
-| `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
+| `rollback` | 按迁移 manifest 单条/整批回滚；运行中默认拒绝 | 是 |
 
 **不做**：不删除任务、不改任务正文、不重建索引、不操作云端或其他设备的任务。
+
+所有命令支持 `--json`。1.6.0 起 stdout 只有一份 JSON 文档，进度和 `[OK]/[PLAN]` 全部静音；告警进 `warnings`，错误输出 `{"error","exit"}`，可直接喂给 `json.load`。`list/find/spaces/backup --list` 保持数组形状，告警走 stderr。
 
 ## 安全设计
 
 - **默认干跑**：`rename --import` 不加 `--apply` 只打印 `[PLAN]`。
-- **按对象备份**：迁移每条一份 manifest；重命名按批次备份数据库、JSONL 和两个账号的侧栏快照。
+- **按对象备份**：迁移每条一份 manifest；重命名按批次备份数据库、JSONL 和各账号侧栏快照。
 - **每条独立事务**：某条失败只影响它自己，其余继续；失败会说明回滚是否成功。
 - **热写可选**：允许 WorkBuddy 运行中写入；要硬性拦截加 `--require-closed`（退出码 3）。
+- **回滚硬拦热写**：`rollback` 检测到 WorkBuddy 运行中直接退出码 3，`--force-hot` 才放行。
+- **清单白名单**：回滚前校验 manifest 里的任务文件、记忆、产出和快照路径，手改越界整批中止。
+- **建组可回滚**：`--create-group` 新建的 `spaces` 行会随整批回滚一起删除。
+- **一致性快照**：`backup` 用 SQLite backup API 生成单文件快照，不再复制 `-wal/-shm`。
 - **副本演练**：`--workbuddy-home` 可指向数据库副本，与真库互不影响。
 - **不覆盖**：目标已有同名文件先备份；备份目录自动去重。
 
@@ -168,6 +176,7 @@ python scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-gr
 | [`references/rename-classify.md`](skills/workbuddy-task-manager/references/rename-classify.md) | 两步式重命名、LPT 分片、子智能体模板 |
 | [`references/cases.md`](skills/workbuddy-task-manager/references/cases.md) | 70 条任务重命名实测与踩坑 |
 | [`references/install.md`](skills/workbuddy-task-manager/references/install.md) | 三端安装与验证 |
+| [`tests/test_workbuddy_tasks.py`](skills/workbuddy-task-manager/tests/test_workbuddy_tasks.py) | 26 项端到端测试，独立临时库 |
 | [`CHANGELOG.md`](skills/workbuddy-task-manager/CHANGELOG.md) | 版本记录 |
 | [`PUBLISHING.md`](skills/workbuddy-task-manager/PUBLISHING.md) | 各平台发布状态、CLI 发布与 CI 自动化 |
 
@@ -188,9 +197,9 @@ python scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs" --create-gr
 
 | 渠道 | 状态 | 入口 |
 |---|---|---|
-| GitHub | v1.5.0 已发布 | [Releases](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases) |
-| SkillHub | 1.5.0 已发布 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-task-manager) |
-| WorkBuddy 开放平台 | 待上传 1.5.0 `-dir` 包 | [控制台](https://open.workbuddy.cn) |
+| GitHub | v1.5.0 已发布；本地 1.6.0 待打 tag | [Releases](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases) |
+| SkillHub | 1.5.0 已发布；1.6.0 待发布 | [详情页](https://skillhub.cn/skills/user_3c4d2464/workbuddy-task-manager) |
+| WorkBuddy 开放平台 | 1.5.0 待提交；本地 1.6.0 待上传 | [控制台](https://open.workbuddy.cn) |
 | skills.sh | 未收录 | 无手动入口 |
 
 仓库已接入 [`.github/workflows/release.yml`](.github/workflows/release.yml)：push `v*` tag 自动校验版本、构建 zip 并发布 GitHub Release；配置 `SKILLHUB_KEY` 后可同步发布 SkillHub。WorkBuddy 开放平台暂无 API / CLI / CI，只能手动提交。

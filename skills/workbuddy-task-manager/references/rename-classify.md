@@ -96,20 +96,21 @@ python <skill-dir>/scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.js
 
 标题长度：
 
-- 默认 20–30 字，前缀和空格计入。
+- 默认 20–30 字符，前缀和空格计入。
 - 可用 `--min-title-len` / `--max-title-len` 调整，允许范围 10–30。
 - 超长/过短/缺前缀/禁用字符的条目会逐条 `[FAIL]`，其他条继续。
 
 脚本行为：
 
-1. 校验每条提案；不合格的记 `failed`，其他条继续。
-2. `--apply` 时批次备份：数据库（SQLite backup API）、目标 JSONL、两个账号的侧栏快照。
+1. 按完整 ID 或唯一前缀定位任务；前缀撞车明确报错，不会改错任务。不合格的提案记 `failed`，其他条继续。
+2. `--apply` 时批次备份：数据库（SQLite backup API）、目标 JSONL、各账号的侧栏快照。
 3. 每条任务：
    - 在 JSONL 末尾追加 `custom-title` 事件；
    - 更新 `sessions.title` 和 `sessions.custom_title`；
    - 更新对应用户快照的 `title`，置 `isUserDefinedTitle=1`；
-   - 立即校验 JSONL 最后一条、数据库、快照，不一致记 `verify_failed`。
-4. 写 `<backup>/rename-manifest.json`，含旧标题、新标题、JSONL 路径、备份路径、校验结果。
+   - 立即校验 JSONL 最后一条、数据库（两个标题字段）、快照，不一致记 `verify_failed`。
+4. 任一层抛错时尽力还原 JSONL、数据库标题和该账号快照，结果里回报 `rolled_back`。
+5. 写 `<backup>/rename-manifest.json`，含旧标题、新标题、JSONL 路径、备份路径、校验结果。
 
 `custom-title` 事件形态：
 
@@ -152,7 +153,7 @@ python <skill-dir>/scripts/workbuddy_tasks.py rename --import ./wb-exp/titles.js
 1. **只写快照**：重启后被数据库覆盖，标题回退。三层一起写。
 2. **只写数据库**：任务内历史仍显示旧标题；必须追加 `custom-title` 事件。
 3. **标题长度算错**：`[系统] ` 前缀本身占 5 个字符；中文、英文、空格都按 1 个字符计。默认 20–30，允许 10–30。
-4. **长标题侧栏截断**：20–30 字通常只能显示前段，完整标题在悬浮提示或详情中。
+4. **长标题侧栏截断**：20–30 字符通常只能显示前段，完整标题在悬浮提示或详情中。
 5. **默认干跑**：`rename --import` 不加 `--apply` 只打印 `[PLAN]`；这是保护行为。
 6. **前缀重复**：`new_title` 不带前缀，交给 `category` 自动补；已带前缀时脚本不重复补。
 7. **大任务直接整读**：单条 20 万字会撑爆子智能体上下文；先 digest 再抽样。

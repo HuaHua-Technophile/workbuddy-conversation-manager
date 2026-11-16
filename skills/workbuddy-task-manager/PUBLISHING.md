@@ -6,9 +6,9 @@
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| GitHub | ✅ v1.5.0 已发布 | [仓库](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.5.0 的 Release 手动创建，SkillHub 新 slug 由本机 CLI 发布；旧 slug 已下架并删除。下一版配置 `SKILLHUB_KEY` 后走 tag 自动化。 |
-| SkillHub（腾讯） | ✅ v1.5.0 已发布 | 新 slug `workbuddy-task-manager` 已发布，skillId `322122`；旧 slug 已下架并删除（404）。`iconUrl` 指向仓库 jsdelivr，`category=dev-programming`。 |
-| WorkBuddy 开放平台 | ⚠️ 已收回，配额已满 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.5.0 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。 |
+| GitHub | ✅ v1.5.0 已发布；本地 1.6.0 待打 tag | [仓库](https://github.com/HuaHua-Technophile/workbuddy-task-manager/releases)，MIT。已接 `.github/workflows/release.yml`：push tag `v*` 自动校验版本、打包并发布 Release。本次 1.5.0 的 Release 手动创建，SkillHub 新 slug 由本机 CLI 发布；旧 slug 已下架并删除。下一版配置 `SKILLHUB_KEY` 后走 tag 自动化。 |
+| SkillHub（腾讯） | ✅ v1.5.0 已发布；1.6.0 待发布 | 新 slug `workbuddy-task-manager` 已发布，skillId `322122`；旧 slug 已下架并删除（404）。`iconUrl` 指向仓库 jsdelivr，`category=dev-programming`。 |
+| WorkBuddy 开放平台 | ⚠️ 1.5.0 已收回；1.6.0 待提交 | 2026-11-15 首次提交后显示已收回；当日提审 5/5 已满。2026-11-16 上传 v1.5.0 `-dir` 包重新提交。技能 ID `os_d12a959583509f94`。1.6.0 尚未上传。 |
 | skills.sh（Vercel Labs 目录） | ⚠️ 未收录 | 无手动提交入口，按 `npx skills add` 安装量索引；已改为 `skills/<name>/` 布局，等平台扫描。 |
 | Qoder 技能市场 | ⏳ 待提交 | 客户端「扩展 → 技能 → 添加技能」可先自用；公开市场走拓展发布。 |
 | skillstore.io / Skill Vault | ⏳ 可选 | 第三方目录，填仓库地址或上传 SKILL.md。 |
@@ -38,6 +38,7 @@ workbuddy-task-manager/
         │   └── icon-256.jpg
         ├── scripts/
         ├── references/
+        ├── tests/                      # 端到端测试，不进发布包
         └── examples/
 ```
 
@@ -67,7 +68,7 @@ python skills/workbuddy-task-manager/scripts/build_pkg.py
 - **标识名**：`workbuddy-task-manager`（小写字母、数字、连字符）
 - **中文名**：`WorkBuddy任务管理`
 - **英文名**：`WorkBuddy Task Manager`
-- **版本**：1.5.0
+- **版本**：1.6.0
 - **SkillHub 分类**：`dev-programming`（开发编程）
 - **许可证**：MIT
 - **头像**：`assets/icon-512.png`（512×512，约 243 KB，≤500 KB；Qoder 同构布局：左下 WorkBuddy 图标、右上紫色文档、右下紫色铅笔）
@@ -101,7 +102,7 @@ WorkBuddy/Qoder 市场解析 `SKILL.md` 时会检查以下字段：
 | 字段 | 本仓库取值 |
 |---|---|
 | `name` | `workbuddy-task-manager` |
-| `version` | `1.5.0` |
+| `version` | `1.6.0` |
 | `display_name` | `WorkBuddy Task Manager` |
 | `display_name_zh` | `WorkBuddy任务管理` |
 | `description` | 中文触发描述 |
@@ -128,17 +129,19 @@ SkillHub CLI 只认另一套驼峰字段，两套并存，互不影响：
 
 `.github/workflows/release.yml` 在 push tag `v*` 时：
 
-1. 校验 tag 与 `SKILL.md`、`workbuddy_tasks.py`、`build_pkg.py` 三处版本号一致。
-2. 运行 `python skills/workbuddy-task-manager/scripts/workbuddy_tasks.py --version` 做脚本可导入检查。
-3. 构建 `-root` / `-dir` 两个 zip。
-4. 创建 GitHub Release 并上传 zip。
-5. 同一 workflow 的 `skillhub` job 登录 SkillHub CLI 并发布（需要仓库 secret `SKILLHUB_KEY`）。
+1. 校验 tag 与 `SKILL.md`、`workbuddy_tasks.py`、`build_pkg.py` 三处版本号一致（`build_pkg.py` 现在从主脚本读版本）。
+2. 运行 `python -m unittest discover -s skills/workbuddy-task-manager/tests -v` 跑端到端测试。
+3. 运行 `--version` 做脚本可导入检查。
+4. 构建 `-root` / `-dir` 两个 zip。
+5. 创建 GitHub Release 并上传 zip。
+6. 同一 workflow 的 `skillhub` job 登录 SkillHub CLI 并发布（需要仓库 secret `SKILLHUB_KEY`）。
 
 标准流程：
 
 ```bash
-# 1) 同步三处版本号：SKILL.md / scripts/workbuddy_tasks.py / scripts/build_pkg.py
+# 1) 同步版本号：SKILL.md / scripts/workbuddy_tasks.py（build_pkg.py 自动读取）
 # 2) 写 CHANGELOG
+# 3) 跑测试：python -m unittest discover -s skills/workbuddy-task-manager/tests -v
 git add -A && git commit -m "feat(vX.Y.Z): ..."
 git push
 git tag -a vX.Y.Z -m "vX.Y.Z — 摘要"
@@ -178,7 +181,7 @@ cp -r skills/workbuddy-task-manager /tmp/pub/
 rm -rf /tmp/pub/workbuddy-task-manager/assets
 python "C:/Users/HuaHua/.skillhub/skills_store_cli.py" publish /tmp/pub/workbuddy-task-manager \
   --host https://api.skillhub.cn \
-  --changelog "v1.5.0：仓库与技能标识统一为 workbuddy-task-manager，CLI 增加 task/group 别名" \
+  --changelog "v1.6.0：JSON 单文档、回滚热写闸门与清单白名单、短 ID 导入修复、26 项端到端测试" \
   --dry-run
 ```
 
@@ -241,21 +244,24 @@ pnpm dlx skills add HuaHua-Technophile/workbuddy-task-manager -g -y
 
 ## 版本发布流程
 
-1. 改三处版本号：`SKILL.md` / `scripts/workbuddy_tasks.py` / `scripts/build_pkg.py`。
+1. 同步版本号：`SKILL.md` / `scripts/workbuddy_tasks.py`（`build_pkg.py` 自动读取，不再手改）。
 2. 更新 `CHANGELOG.md`，同步 `PUBLISHING.md` 的渠道状态。
-3. 本地 `python skills/workbuddy-task-manager/scripts/build_pkg.py`，确认两个 zip 可生成。
-4. `git add -A && git commit -m "feat(vX.Y.Z): ..." && git push`。
-5. 配置 `SKILLHUB_KEY` 后，`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`；Actions 会完成 Release 与 SkillHub。
-6. 到 WorkBuddy 开放平台手动上传 `-dir` 包（额度允许时）。
-7. 需要时手动补 SkillHub 图标/分类或检查审核状态。
+3. 本地跑测试：`python -m unittest discover -s skills/workbuddy-task-manager/tests -v`。
+4. 本地 `python skills/workbuddy-task-manager/scripts/build_pkg.py`，确认两个 zip 可生成。
+5. `git add -A && git commit -m "feat(vX.Y.Z): ..." && git push`。
+6. 配置 `SKILLHUB_KEY` 后，`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`；Actions 会跑测试并完成 Release 与 SkillHub。
+7. 到 WorkBuddy 开放平台手动上传 `-dir` 包（额度允许时）。
+8. 需要时手动补 SkillHub 图标/分类或检查审核状态。
 
 发布前检查：
 
-- [ ] 三处版本号一致：`SKILL.md` / `scripts/workbuddy_tasks.py` / `scripts/build_pkg.py`
+- [ ] 版本号一致：`SKILL.md` / `scripts/workbuddy_tasks.py` / `build_pkg.VERSION`
+- [ ] `python -m unittest discover -s skills/workbuddy-task-manager/tests -v` 全绿（PyYAML 未装时允许 1 项 skip）
 - [ ] `python scripts/workbuddy_tasks.py doctor` 通过
 - [ ] `python scripts/build_pkg.py` 能生成两个 zip
-- [ ] 解压 `-dir` 包确认第一层目录名与 `name` 一致
-- [ ] frontmatter 必填字段齐全（WorkBuddy 下划线族 + SkillHub 驼峰族）
+- [ ] 解压 `-dir` 包确认第一层目录名与 `name` 一致，且不含 `tests/`
+- [ ] frontmatter 必填字段齐全（WorkBuddy 下划线族 + SkillHub 驼峰族，共 19 个）
+- [ ] `examples_zh` / `examples_en` 各不超过 3 条（平台硬限制）
 - [ ] `iconUrl` 地址可达（`curl -I`）
 - [ ] 发布前临时目录已剔除 `assets/`
 - [ ] 头像 512×512 且 ≤500 KB

@@ -40,7 +40,13 @@ cp -r skills/workbuddy-task-manager "$HOME/.qoder/skills/"
 python "$HOME/.qoder/skills/workbuddy-task-manager/scripts/workbuddy_tasks.py" doctor
 ```
 
-`doctor` 10 项全 `OK` 说明数据库、任务文件、目录一致性、快照和备份都正常。
+`doctor` 10 项全 `OK` 说明数据库、任务文件、目录一致性、快照和备份都正常。`备份` 项超过 14 天会提示重新备份。
+
+开发仓库内还可以跑端到端测试（26 项，每个用例独立临时库，不碰真实数据）：
+
+```bash
+python -m unittest discover -s skills/workbuddy-task-manager/tests -v
+```
 
 ## 常见问题
 

@@ -27,7 +27,7 @@
 ├── assistant-display\<session-id>.json
 ├── file-history\<session-id>\
 ├── file-tree-manifests\<session-id>.json
-└── backup\                          迁移备份
+└── backup\                          旧版迁移备份（1.6.0 起默认改到当前目录 workbuddy-backups\）
 ```
 
 任务正文、子代理与工具结果按“分组”分目录；其余按 `session-id` 存放的索引不随分组移动。
@@ -124,7 +124,7 @@ WHERE (deleted_at IS NULL OR deleted_at < 0) AND status = 'active';
 
 快照格式：`version=3`，紧凑 JSON；`items` 必须满足 `isValidSnapshotItem`：`id` / `title` / `state` / `transport` / `kind` / `lastActivityAt` / `isPinned` 类型正确，`space` 为 `{type,name}`。
 
-标题限制：默认 20–30 字，允许 10–30；前缀和空格都计入长度；前缀正则 `^\[[^\[\]]{1,8}\]\s+\S`；允许重复；不加引号、书名号、句号、问号、emoji、路径分隔符。20 字以上在侧栏通常会截断，完整标题需悬浮或进详情查看。提案可只给 `category` + 不带前缀的 `new_title`，脚本会自动补 `[category] `。
+标题限制：默认 20–30 字符，允许 10–30；前缀和空格都计入长度；前缀正则 `^\[[^\[\]]{1,8}\]\s+\S`；允许重复；不加引号、书名号、句号、问号、emoji、路径分隔符。20 字符以上在侧栏通常会截断，完整标题需悬浮或进详情查看。提案可只给 `category` + 不带前缀的 `new_title`，脚本会自动补 `[category] `。
 
 ## 任务正文提取
 
@@ -192,6 +192,7 @@ JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径�
   "new_is_playground": 0,
   "old_space_id": "…",
   "new_space_id": "…",
+  "backup_dir": "…",
   "db_changed": true,
   "session": {
     "src_jsonl": "…", "dst_jsonl": "…",
@@ -204,24 +205,30 @@ JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径�
 }
 ```
 
-`batch.json` 的 `items` 是本批全部 manifest 路径。回滚按 manifest 逆序恢复：数据库行 → 任务文件/子目录 → 记忆 → 产出 → 侧栏快照。
+`batch.json` 的 `items` 是本批全部清单路径（任务 manifest + `--create-group` 的 `spaces/space-<id>.json`），`created_spaces` 记录新建分组清单。回滚按清单逆序恢复：数据库行 → 任务文件/子目录 → 记忆 → 产出 → 侧栏快照，最后删除本次新建、且已无任务引用的 `spaces` 行。
+
+回滚前逐条校验清单路径：任务文件必须是 `projects/` 下的 `<sid>.jsonl`，源目录名必须是 sid，记忆/产出必须落在源或目标 cwd 内，所有备份文件必须落在 `backup_dir` 内；快照必须是 `<home>/<user>/sidebar-list-snapshot.json`。任一条不满足就整批中止（退出码 2），不先回滚一半。
+
+`rollback` 会直接改数据库行并搬文件，应用运行中默认拒绝（退出码 3）；`--force-hot` 才放行。`--workbuddy-home` 指向副本时跳过该拦截。
 
 ### 重命名批次备份
 
 `rename --import --apply` 在批次开始时备份：
 
 ```
-<backup>/db/workbuddy.db (+wal/shm)
+<backup>/db/workbuddy.db
 <backup>/snapshots/<user-id>/sidebar-list-snapshot.json
 <backup>/sessions/<sid>/<sid>.jsonl
 <backup>/rename-manifest.json
 ```
 
-`rename-manifest.json` 含 `old_title` / `new_title` / `jsonl` / `backup` / `checks` / `event_id`；旧标题只在这里保留。重命名不提供自动回滚；恢复时把 JSONL 和快照备份复制回原位，并恢复 `sessions.title` / `custom_title`。
+`rename-manifest.json` 含 `old_title` / `old_custom_title` / `new_title` / `jsonl` / `backup` / `checks` / `event_id`；旧标题只在这里保留。单条写入任一层失败时，脚本会尽力把 JSONL、数据库 `title/custom_title` 和该账号快照还原到写入前，并在结果里回报 `rolled_back`。
 
 ### 整库快照
 
-`backup` 写到当前目录 `workbuddy-backups/db/<timestamp>/`，含数据库、WAL/SHM 和 `meta.json`；默认保留最近 10 份，`--keep N` 调整，`--list` 列出。快照用于手工恢复或破坏性操作前锚点。
+`backup` 写到当前目录 `workbuddy-backups/db/<timestamp>/`，含 `workbuddy.db` 和 `meta.json`；由 SQLite backup API 生成，WAL 已合入目标库，**不再额外复制 `-wal/-shm`**。默认保留最近 10 份，`--keep N` 调整，`--list` 列出。快照用于手工恢复或破坏性操作前锚点。
+
+统计任务数时 `deleted_at=-1` 与 `NULL` 都算未删除，只有正数时间戳才算已删除。
 
 备份目录用 `unique_dir` 去重：同名或同一秒已存在时追加时间戳，不覆盖上一轮备份。文本文件统一走临时文件 + `os.replace` 原子写入。
 
@@ -238,9 +245,13 @@ JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径�
 7. `projects/` 下是否还有无任务的空目录；
 8. 侧栏快照文件数、条目数、缺快照/重复/缺账号；
 9. 数据库 `title` 与快照 `title` 是否一致；
-10. 备份目录数量与最新一份。
+10. 备份目录数量与最新一份；最近备份超过 14 天标 `warn`，从未备份提示先跑 `backup`。
 
 `doctor --deep` 额外逐条扫描 JSONL 最后一条 `custom-title` 与数据库 `title` 是否一致。退出码 `0` 全绿，`1` 有告警。
+
+## JSON 输出
+
+`--json` 时 stdout 只有一个 JSON 文档：人类可读进度静音，告警进 `warnings`；`list/find/spaces/backup --list` 保持数组形状、告警走 stderr；错误输出 `{"error","exit"}`。不要再用「stdout 切片 + 搜 `{`」的方式解析。
 
 ## 数据库写入与锁
 
@@ -248,8 +259,9 @@ JSONL 解析必须在搬走 `.jsonl` **之前**完成；只收 `cwd` 内路径�
 - 更新：`BEGIN IMMEDIATE`（Python `with con`）→ `UPDATE` → commit。
 - 锁冲突（`database is locked` / `busy`）：重试 3 次，每次 1 秒；仍失败中止该条。
 - 成功后尝试 `PRAGMA wal_checkpoint(TRUNCATE)`；应用运行时可能失败，忽略即可，WAL 中已提交的数据仍可见。
-- 备份数据库用 SQLite `Connection.backup()`，比直接复制正在写入的 `.db` 更一致；WAL/SHM 额外复制一份。
+- 备份数据库用 SQLite `Connection.backup()`，比直接复制正在写入的 `.db` 更一致；WAL 已合入目标快照，不再额外复制 `-wal/-shm`。
 - `--require-closed`：`move` / `rename --import` / `rollback` 加此参数时，如果检测到 WorkBuddy 正在运行，直接返回退出码 `3`，不写任何数据。
+- `rollback` 不用 `--require-closed` 也默认硬拦热写；`--force-hot` 是唯一逃生开关。
 
 ## 验证清单
 
@@ -297,3 +309,8 @@ SELECT cwd, is_playground, space_id FROM sessions WHERE id = '<session-id>';
 18. **路径编码双横线**：`X:/赞大拇指` 应编码为 `x-赞大拇指`，不是 `x--赞大拇指`；`:/` 要合并替换。
 19. **正文产出解析放在搬 JSONL 之后**：会永远解析不到 `Write`/`Edit`；必须在移动前抽取。
 20. **`function_call.arguments` 是 JSON 字符串**：WorkBuddy 的写文件参数不在 `input` 里，需解析 `arguments` 后的 `file_path`。
+21. **把 `deleted_at=-1` 当已删除**：`-1` 与 `NULL` 都是未删除，只有正数时间戳才是删除时间；按布尔值判断会把大量正常任务漏掉。
+22. **手改回滚清单**：manifest 里的路径会被白名单校验；不要改 `src_jsonl` / 记忆 / 产出 / 快照路径，越界会整批中止。
+23. **整库快照配旧 WAL**：不要手工把 `workbuddy.db` 和另一份 `-wal` 拼在一起恢复；1.6.0 起的快照是单文件一致性快照，直接用它覆盖即可。
+24. **建组迁移后只回滚任务**：`--create-group` 的 `spaces` 行由同批 `space-create` 清单管理；只回滚任务 manifest 会留下空分组，要用 `rollback --batch`。
+25. **用字符串切片解析 `--json`**：1.6.0 起 stdout 只有一份 JSON，直接 `json.load`；旧版会混入进度行。

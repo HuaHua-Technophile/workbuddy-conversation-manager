@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v1.5.0)'
+        description: 'Tag to release (e.g. v1.6.0)'
         required: true
         type: string
 
@@ -44,14 +44,18 @@ jobs:
           import os, pathlib, re, sys
           tag = os.environ['TAG_VERSION']
           root = pathlib.Path('skills/workbuddy-task-manager')
+          sys.path.insert(0, str(root / 'scripts'))
+          import build_pkg
           skill = re.search(r'^version:\s*(\S+)', (root / 'SKILL.md').read_text(), re.M).group(1)
-          pkg = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/build_pkg.py').read_text()).group(1)
           sessions = re.search(r'VERSION\s*=\s*["\']([^"\']+)', (root / 'scripts/workbuddy_tasks.py').read_text()).group(1)
-          print(f'tag={tag} SKILL.md={skill} build_pkg={pkg} sessions={sessions}')
-          if not (tag == skill == pkg == sessions):
-              print('::error::版本号不一致：先在 SKILL.md / workbuddy_tasks.py / build_pkg.py 里同步到 ' + tag + ' 再打 tag', file=sys.stderr)
+          print(f'tag={tag} SKILL.md={skill} build_pkg={build_pkg.VERSION} sessions={sessions}')
+          if not (tag == skill == sessions == build_pkg.VERSION):
+              print('::error::版本号不一致：先在 SKILL.md / workbuddy_tasks.py 里同步到 ' + tag + ' 再打 tag', file=sys.stderr)
               sys.exit(1)
           PY
+
+      - name: Run tests
+        run: python -m unittest discover -s skills/workbuddy-task-manager/tests -v
 
       - name: Doctor (sanity check script imports)
         run: python skills/workbuddy-task-manager/scripts/workbuddy_tasks.py --version

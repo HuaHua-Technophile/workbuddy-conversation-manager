@@ -9,12 +9,29 @@
 """
 import argparse
 import os
+import re
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # skills/<name>/
 REPO = os.path.dirname(os.path.dirname(ROOT))                        # 仓库根
 NAME = "workbuddy-task-manager"
-VERSION = "1.5.0"
+VERSION_FALLBACK = "1.6.0"
+SCRIPT = os.path.join(ROOT, "scripts", "workbuddy_tasks.py")
+
+
+def read_version():
+    """版本号单一来源：主脚本的 VERSION 常量，避免三处各自漂移。"""
+    try:
+        with open(SCRIPT, encoding="utf-8") as f:
+            m = re.search(r'^VERSION\s*=\s*["\']([^"\']+)', f.read(), re.M)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return VERSION_FALLBACK
+
+
+VERSION = read_version()
 
 FILES = ["SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "PUBLISHING.md"]
 DIRS = ["scripts", "references", "examples"]

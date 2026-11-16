@@ -21,7 +21,7 @@ examples_en:
   - "Move NAS-related tasks into the NAS group with memory and outputs"
   - "Create a D:/VMs group and move VM tasks into it"
 author: HuaHua
-version: 1.5.0
+version: 1.6.0
 tags: [WorkBuddy, 任务管理, 分组, 重命名, 迁移, SQLite]
 license: MIT
 ---
@@ -40,7 +40,7 @@ Manage local WorkBuddy tasks: doctor, list/filter, two-step rename from full tra
 | `rename --import` | 导入 `titles.json`；默认干跑，`--apply` 落盘 | 是 |
 | `move` | 迁移任务到任务/分组；默认连记忆、产出和任务文件一起搬 | 是 |
 | `backup` | 整库快照，默认保留最近 10 份 | 否 |
-| `rollback` | 按迁移 manifest 单条/整批回滚 | 是 |
+| `rollback` | 按迁移 manifest 单条/整批回滚；运行中默认拒绝 | 是 |
 | `extract` / `apply-titles` | 旧命令，保留兼容；建议改用 `rename` | 部分 |
 
 **不做什么**：不删除任务、不改任务正文、不重建搜索索引、不操作云端或其他设备的任务。
@@ -82,13 +82,27 @@ python install.py --to ~/.qoder/skills
 ```bash
 python <skill-dir>/scripts/workbuddy_tasks.py doctor
 python <skill-dir>/scripts/workbuddy_tasks.py doctor --deep
+# 仓库内跑端到端测试（26 项，纯标准库、不碰真实库）
+python -m unittest discover -s skills/workbuddy-task-manager/tests -v
 ```
 
-10 项全 `OK` 说明可用；`--deep` 额外核对 JSONL 最后一条 custom-title。`WorkBuddy 进程` 只是提示项，运行中也允许热写。
+10 项全 `OK` 说明可用；`--deep` 额外核对 JSONL 最后一条 custom-title。`WorkBuddy 进程` 只是提示项，运行中也允许热写；`备份` 项超过 14 天会提示重新备份。
 
 ## 命令总览
 
 所有命令支持 `--json`；`--workbuddy-home` 可指向数据库副本做演练。写操作默认允许 WorkBuddy 运行中热写；要硬性拦截加 `--require-closed`（退出码 3）。
+
+### JSON 输出契约（1.6.0 起）
+
+- `--json` 时 stdout **只有一个 JSON 文档**，进度、`[OK]`、`[PLAN]` 等人话全部静音；告警放进结果的 `warnings` 数组。
+- `list` / `find` / `spaces` / `backup --list` 保持数组形状，告警改走 stderr。
+- 失败时 stdout 给你一份 `{"error": "...", "exit": N}`，stderr 同时给出错误原文；不会再出现「半截 JSON + 人话」。
+- 常见形状：
+  - `move`：`{results, batch_manifest, backup, removed_dirs, created_spaces, warnings}`
+  - `rollback`：`{restored, failed, items, applied, warnings}`
+  - `rename --export` / `extract`：`{out_dir, count, items, manifest, shards, skipped, warnings}`；无匹配时 `count=0`、`out_dir=null`，不算错误。
+  - `rename --import`：`{applied, plan, skipped, results, backup, warnings}`
+  - `backup`：`{backup, meta, removed, warnings}`
 
 ### doctor
 
@@ -135,7 +149,7 @@ python <skill-dir>/scripts/workbuddy_tasks.py rename --export --area group --key
 ]
 ```
 
-`sid` 支持完整 UUID 或前 8 位；`new_title` 可不带前缀，`category` 会自动补成 `[分类] 标题`。
+`sid` 支持完整 UUID 或前 8 位；导入时按唯一前缀解析，撞车会明确报「ID 前缀不唯一」，不会改错任务。`new_title` 可不带前缀，`category` 会自动补成 `[分类] 标题`。
 
 写回：
 
@@ -151,13 +165,13 @@ python <skill-dir>/scripts/workbuddy_tasks.py rename --import titles.json --appl
 标题规则：
 
 - 格式 `[短分类] 标题`，单分类；短类 2–4 个汉字。
-- 默认长度 **20–30 字**；可用 `--min-title-len` / `--max-title-len` 调整，允许范围 **10–30**。
+- 默认长度 **20–30 字符**；可用 `--min-title-len` / `--max-title-len` 调整，允许范围 **10–30**。
 - 前缀和空格计入长度；较长标题侧栏会截断，完整标题可悬浮或进详情查看。
 - 中文为主，NAS/DDNS/SSH/nvm/AI 等技术词保留英文；不加引号、书名号、句号、问号、emoji、路径分隔符。
 - 允许不同任务重名；默认覆盖已有自定义标题。
 - 不写密码/令牌原文。
 
-标题写入三层：JSONL 追加 `custom-title`、数据库 `title/custom_title`、对应用户快照 `title`。写后逐条校验，不一致记 `verify_failed`。
+标题写入三层：JSONL 追加 `custom-title`、数据库 `title/custom_title`、对应用户快照 `title`。写后逐条校验，不一致记 `verify_failed`；任一层抛错会把 JSONL、数据库标题和快照尽力还原到写入前，并回报 `rolled_back`。
 
 ### move
 
@@ -186,6 +200,10 @@ python <skill-dir>/scripts/workbuddy_tasks.py move --task 6ed7f61f --to "X:/赞�
 
 每条迁移独立事务，失败只回滚该条；manifest 记录源/目标、任务文件、记忆、产出和快照。
 
+迁移备份默认写到当前目录 `workbuddy-backups/move-<时间戳>/`（不再写进 `~/.workbuddy`），可用 `--backup-dir` 覆盖。`--create-group` 新建的 `spaces` 行会写成一条 `space-create` 清单放进同一批次；`rollback --batch` 会在搬回任务之后自动删掉这个新建分组，避免留下空壳。
+
+每条迁移的 manifest 在回滚前会做路径白名单校验：`src_jsonl/dst_jsonl` 必须是 `projects/` 下的 `<sid>.jsonl`，记忆/产出必须落在源或目标 cwd 内，备份文件必须落在该条备份目录内；手改清单越界会整批中止（退出码 2），不会先回滚一半。
+
 ### backup / rollback
 
 ```bash
@@ -194,7 +212,7 @@ python <skill-dir>/scripts/workbuddy_tasks.py backup --keep 10
 python <skill-dir>/scripts/workbuddy_tasks.py backup --backup-dir D:/wb-backups
 ```
 
-默认写到当前目录 `workbuddy-backups/db/<timestamp>/`，含 `workbuddy.db`、WAL/SHM（存在时）和 `meta.json`；默认保留最近 10 份。快照用于手工恢复或破坏性操作前锚点，不自动回滚。
+默认写到当前目录 `workbuddy-backups/db/<timestamp>/`，含 `workbuddy.db` 和 `meta.json`，默认保留最近 10 份。快照由 SQLite backup API 生成，是**一致性单文件快照**，不再额外复制 `-wal/-shm`（旧主库配新 WAL 反而可能拼出不一致的恢复材料）；恢复时只拿 `workbuddy.db` 即可。统计任务数时 `deleted_at=-1` 按未删除计入。
 
 迁移回滚：
 
@@ -203,6 +221,8 @@ python <skill-dir>/scripts/workbuddy_tasks.py rollback \
   --manifest "<backup>/<sid>/manifest.json"
 python <skill-dir>/scripts/workbuddy_tasks.py rollback --batch "<backup>/batch.json"
 ```
+
+回滚会在运行中的应用里直接改写数据库行并搬文件，**默认检测到 WorkBuddy 运行中就拒绝**（退出码 3）；确认要热回滚时加 `--force-hot`，脚本会打风险提示。`--workbuddy-home` 指向副本时不做该拦截。`--batch` 同时处理任务 manifest 与 `space-create` 清单。
 
 ### 旧命令
 
@@ -242,11 +262,13 @@ python <skill-dir>/scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs"
 
 - 先 `doctor`，破坏性操作前 `backup`。
 - 写操作默认允许热写；要强制应用退出加 `--require-closed`，退出码 `3`。
+- 回滚是唯一默认硬拦热写的操作：应用运行中直接退出码 `3`，确需热回滚才加 `--force-hot`。
 - 每条迁移/重命名独立事务；失败只影响该条，其余继续。
-- 重命名按批次备份数据库、目标 JSONL 和两个账号的侧栏快照；旧标题只进 `rename-manifest.json`。
-- 迁移每条约一份 manifest；记录数据库行、任务文件、记忆、产出和快照。
+- 重命名按批次备份数据库、目标 JSONL 和各账号的侧栏快照；旧标题只进 `rename-manifest.json`。单条写入失败会尽力还原 JSONL、数据库标题和快照。
+- 迁移每条约一份 manifest；记录数据库行、任务文件、记忆、产出和快照。回滚前校验清单路径白名单，清单被手改越界时整批中止。
+- 侧栏快照按 `<user-id>/sidebar-list-snapshot.json` 分账号备份，同名文件不会互相覆盖。
 - 目标已有同名任务文件/产出文件时先备份，不覆盖。
-- 已删除任务默认跳过；`--include-deleted` 只用于查看。
+- 已删除任务默认跳过；`--include-deleted` 只用于查看。`deleted_at=-1` 是未删除。
 - 子智能体只提案，不直接写库；写入由主智能体统一执行。
 
 ## 非目标与限制
@@ -276,6 +298,13 @@ python <skill-dir>/scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs"
 | `--create-group` 报目录不存在 | 默认要求目标目录已存在 | 确认路径后加 `--allow-missing` |
 | 迁移后旧项目目录还在 | 加了 `--keep-orphans`，或目录里还有其他任务 | 去掉该参数重跑；有任务的目录不会删 |
 | 备份目录带时间戳后缀 | 同名或同一秒已存在 | 正常保护行为，用最新目录 |
+| 备份里没有 `-wal/-shm` | 1.6.0 起用 SQLite backup API 生成一致性单文件快照 | 正常；恢复只需 `workbuddy.db` |
+| `--json` 解析失败 | 旧版本会混入人话或多份 JSON | 升级到 1.6.0+；stdout 现在只有一份文档 |
+| `rollback` 返回 3 | WorkBuddy 正在运行，回滚默认拒绝热写 | 完全退出应用后重试；确需热回滚加 `--force-hot` |
+| `rollback` 报「清单不合法」 | manifest 路径被手改、越出 `projects/`、cwd 或备份目录 | 重新用 `move` 生成清单；不要手改路径字段 |
+| 建组回滚后分组还在 | 只回滚了任务 manifest，没回滚同批的 `space-create` 清单 | 用 `rollback --batch <batch.json>` 回滚整批 |
+| `rename --import` 报「ID 前缀不唯一」 | 前 8 位在库里撞车 | 在 titles.json 里给完整 36 位 ID |
+| doctor 备份项提示超过 14 天 | 最近备份太久 | 重新运行 `backup` |
 | 子智能体漏条 | 清单没对齐 | 用 `manifest.json` 的 sid 做差集核对 |
 | `python -c` 反引号被执行 | Bash 命令替换 | 长脚本写成 `.py` 文件再运行 |
 
@@ -285,4 +314,5 @@ python <skill-dir>/scripts/workbuddy_tasks.py move --task 6cd29df7 --to "D:/VMs"
 - `references/rename-classify.md`：导出/分片/子智能体/导入/报告的完整流程。
 - `references/cases.md`：70 条任务重命名实测数据与踩坑记录。
 - `references/install.md`：Qoder、WorkBuddy、Codex 的安装位置与复制命令。
+- 仓库内 `tests/test_workbuddy_tasks.py`：26 项端到端测试；每个用例用独立临时库，不碰真实数据（测试不随技能包分发）。
 - `README.md` / `CHANGELOG.md` / `PUBLISHING.md`：使用说明、版本记录、各平台发布状态。
